@@ -30,6 +30,7 @@ gem "paperclip", "~> 5.0.0"
 gem 'aws-sdk', '~> 2.3.0'
 gem 'drip-ruby', require: 'drip'
 gem 'acts-as-taggable-on', '~> 6.0'
+gem 'rack-timeout'
 
 group :development do
   # Access an IRB console on exception pages or by using <%= console %> anywhere in the code.
