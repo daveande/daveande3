@@ -40,7 +40,7 @@
               %li.list-inline-item= "&#169; #{Date.today.year}, David Anderson".html_safe
               %li.list-inline-item= link_to "Home", root_url, class: 'text-reset'
               - if current_user && current_user.is_admin
-                %li.list-inline-item= link_to "Admin", admin_interviews_url, class: 'text-reset'
+                %li.list-inline-item= link_to "Admin", admin_posts_url, class: 'text-reset'
               - if current_user
                 %li.list-inline-item= link_to "Logout", destroy_user_session_url, method: :delete, class: 'text-reset'
 
