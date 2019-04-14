@@ -1,0 +1,15 @@
+---
+layout: post
+title: How to create a hover intent function with Google Maps
+date: '2012-04-17T07:36:00.002-04:00'
+author: DA
+tags:
+- javascript
+- Google Maps
+- coding
+modified_time: '2012-04-17T07:37:02.610-04:00'
+blogger_id: tag:blogger.com,1999:blog-17447662.post-2317048138091937659
+blogger_orig_url: http://daveande.blogspot.com/2012/04/how-to-create-hover-intent-function.html
+---
+
+Last week I wanted to fire a piece of code (div scrolling) when the user's mouse was hovering over a Google maps polygon. I got that working pretty easily with a simple Google Maps listener with the 'mouseover' event. Unfortunately, that created a different problem - if the user moved the mouse quickly over the map and crossed over many polygons, the div scrolling code I had within the listener was fired too much.<br /><br />I ended up finding a <a href="http://cherne.net/brian/resources/jquery.hoverIntent.html" target="_blank">jQuery plugin, hoverintent,</a> &nbsp;that only makes the call when the user's mouse is hovering over the element for a specific amount of time. This would have certainly done the trick on a DOM element but it wasn't going to work on my map when the polygon wasn't a DOM element, it was an overlay on the Google maps object. An even easier solution (no plugin required) emerged.<br /><br />Javascript has a setTimeout() method that you can use to execute code in the future. So, in &nbsp;my case, I set a variable, timer, to the setTimeout() method and the code I wanted called; I checked for timer when the user had the mouse over an element, if the timer existed, I set it to null and used the clearTimeout method and then reset timer to the a new SetTimeout. I added another Google Maps listener for the event 'mouseout' of the polygon and set timer to null while using the clearTimeout(). In this way, the div scrolling only happened when the timer reached a certain time, in other words, when the user's mouse was hovering over a polygon for &nbsp;a certain amount of time.<br /><br />google.maps.event.addListener(polygon, 'mouseover', function(event) {<br /><br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; if (timer) {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; clearTimeout(timer);<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; timer = null;<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; }<br />//set timer so animation of scrollbar only happens when mouse is within polygon for longer than 500 milliseconds<br />&nbsp; &nbsp; &nbsp; &nbsp; timer = setTimeout(function() {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; $('#side_content').animate({ top: -$('#div').top }, 300);<br />&nbsp; &nbsp; &nbsp; &nbsp; }, 500);<br />});<br /><br />google.maps.event.addListener(polygon, 'mouseout', function(event) {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; if (timer) {<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; clearTimeout(timer);<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; timer = null;<br />&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; }<br />});<br /><div><br /></div>

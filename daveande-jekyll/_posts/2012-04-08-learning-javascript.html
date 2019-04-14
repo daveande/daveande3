@@ -1,0 +1,15 @@
+---
+layout: post
+title: Learning Javascript
+date: '2012-04-08T11:42:00.000-04:00'
+author: DA
+tags:
+- json
+- javascript
+- coding
+modified_time: '2012-04-08T11:53:41.415-04:00'
+blogger_id: tag:blogger.com,1999:blog-17447662.post-3717528190794563173
+blogger_orig_url: http://daveande.blogspot.com/2012/04/learning-javascript.html
+---
+
+Though we're using Rails as our framework, Picket Report's code base is only 45% Ruby and 55% Javascript. I didn't have much experience with Javascript until the past month or so, and though the syntax is a little cumbersome at first, I've started to enjoy using the language, particularly creating and handling Javascript objects.<br /><br />Most APIs that I've dealt with so far respond with JSON objects, but it wasn't until the last two or three weeks that I got more comfortable understanding how get to what I wanted within a response. Part of it was learning how to use console.debug() and thus being able to actually see the object and how it was structured, but most of my improvement can be chalked up to learning some basic Javascript - looping, if/then statements, creating objects for later use, etc.<br /><br />A basic example from this past week. I created a marker ID object that kept track of each google maps marker on my map as well as a string of html content I wanted to appear in a map popup/infowindow when the user clicked on a marker. I organized the object by marker ID so that I could easily find that marker at a later point. I couldn't have done this a couple of weeks ago, and when it came together it was a nice reminder of how much I've learned and a big aha moment that seemed to open up a sense of possibility...<br /><br /><br />&nbsp;markerIDObject[marker.__gm_id] = {};<br />&nbsp;markerIDObject[marker.__gm_id].marker = marker;<br />&nbsp;markerIDObject[marker.__gm_id].content = contentString;<br /><br /><br />&nbsp;this.neighborhoodShowInfoWindowBounce = function(marker_id) {<br />&nbsp; &nbsp; showInfoWindow(markerIDObject[marker_id].marker, markerIDObject[marker_id].content);<br />&nbsp; &nbsp; markerBounce(markerIDObject[marker_id].marker);<br />&nbsp; }<br /><div><br /></div><br />

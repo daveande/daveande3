@@ -1,0 +1,15 @@
+---
+layout: post
+title: Changing redirect after Devise signin
+date: '2012-04-11T07:38:00.002-04:00'
+author: DA
+tags:
+- Ruby on Rails
+- coding
+- devise
+modified_time: '2012-04-11T07:38:57.932-04:00'
+blogger_id: tag:blogger.com,1999:blog-17447662.post-8094600725789051633
+blogger_orig_url: http://daveande.blogspot.com/2012/04/changing-redirect-after-devise-signin.html
+---
+
+We use Devise to manage user sign authorization and authentication. This solution offers a lot of stuff for free, such as password resets and account confirmations, but it's also a little hard to navigate at first since most of the functionality seems hidden from view. Read up a little bit though and you'll find just about every customization you desire is written about on the <a href="https://github.com/plataformatec/devise/wiki" target="_blank">Devise wiki, with instructions on implementation</a>.<br /><br />Yesterday, I customized the redirect after a user signs in. Initially, devise is set up to redirect to the root_url after sign in, but it's easy enough to override it by adding a after_sign_in_path_for(resource) method in the application controller. Because our signin "page" is actually a small menu that sits on every page, I wanted the user to stay on the current page after signin rather than be redirected to a specific page. For example, if a user is using our map and decides to sign in, I want that user to stay on the map after signin, not be redirected to a different page. Seems easy enough, and although it took me a little while to figure out a solution, the implementation for this functionality isn't all that hard.<br /><br />The key for me was learning about Rails' request.fullpath, which will return path the user is on. (There is also request.uri, request.url, request.path, request.host and a few others). So, on my sign in form, I added a variable that I set to the fullpath returned from request.fullpath, and passed that variable to the user sign in path as a params. With that, I have the current page the user is on and can redirect them there after successful sign in.<br /><br />&lt;% current_path = request.fullpath %&gt;<br />&nbsp;&lt;%= form_for("user", :url =&gt; user_session_path(:current_page =&gt; current_url), :html =&gt; { :id =&gt; "signin_form" }) do |f| %&gt;<br /><br /><br />application_controller<br /><br />def after_sign_in_path_for(resource)<br />&nbsp;params[:current_page] || super<br />end<br /><br /><br />

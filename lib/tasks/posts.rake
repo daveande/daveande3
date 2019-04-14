@@ -2,10 +2,10 @@ namespace :posts do
 
   desc "import jekyll posts"
   task :import => :environment do
-    Dir.foreach("/Users/daveande/everclimb/daveande-jekyll/_posts") do |f|
+    Dir.foreach("#{Rails.root}/daveande-jekyll/_posts") do |f|
       unless [".","..",".DS_Store"].include?(f)
         puts "importing #{f}"
-        f = File.read("/Users/daveande/everclimb/daveande-jekyll/_posts/#{f}")
+        f = File.read("#{Rails.root}/daveande-jekyll/_posts/#{f}")
         front_matter = YAML.load(f.split("---")[1])
         Post.create!(
           title: front_matter["title"],
