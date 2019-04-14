@@ -1,0 +1,23 @@
+.modal-dialog.modal-sm
+  .modal-content
+    .modal-header
+      %button.close{"aria-label" => "Close", "data-dismiss" => "modal", :type => "button"}
+        %span{"aria-hidden" => "true"} &times;
+      %h4.modal-title
+        Subscribe
+    .modal-body
+      .text-center
+        %p
+          Submit your email below to receive our interviews and tips
+          in your inbox.
+        .js-message#subscribe-modal
+        = form_tag subscribers_url, remote: true, id: "newsletter", class: 'form-inline newsletter' do
+          %input.form-control{:name => "email", :placeholder => "Your email address", :type => "text"}/
+          = hidden_field_tag :location, "subscribe-modal"
+          %input.btn.btn-default.btn-submit{:type => "submit", :value => "Subscribe", data: {disable_with: "..."}}/
+        //= form_tag subscribers_url, remote: true do
+        //  = hidden_field_tag :location, "subscribe-modal"
+        //  .form-group
+        //    %input.form-control{:name => "email", :placeholder => "Your email address", :type => "text"}/
+        //  = submit_tag "Subscribe", class: "button button-small", data: {disable_with: "..."}
+

@@ -1,0 +1,20 @@
+%section.dark-bg
+  .container.inner-top-xs.inner-bottom-xs
+    %h1.m-b-0 Resources For Freelancers
+
+%section.light-bg
+  .container.inner-sm
+    .row
+      .col-md-3
+        .sidebox.widget
+          = render "resources/sidebar_nav"
+      .col-md-9
+        %p
+          Resources tagged with
+          = link_to @tag_str, tag_url(@tag_str), class: 'tag tag-orange'
+        - @resources.each do |resource|
+          .row
+            .col-md-12
+              = render partial: "resources/resource", locals: {resource: resource, url: url_for_resource(resource)}
+
+

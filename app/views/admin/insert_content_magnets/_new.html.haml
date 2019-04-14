@@ -1,0 +1,29 @@
+.modal-dialog
+  .modal-content
+    .modal-header
+      %button.close{"aria-label" => "Close", "data-dismiss" => "modal", :type => "button"}
+        %span{"aria-hidden" => "true"} &times;
+      %h4.modal-title
+        Insert Content Magnet
+    .modal-body
+      .row
+        .col-md-12
+          %p
+            = link_to admin_insert_content_magnets_url, remote: true do
+              &#8592; Back
+          %h4= @magnet.title
+          = form_tag admin_insert_content_magnets_url, class: "js-addContentUpgradeCallout" do
+            = hidden_field_tag :id, @magnet.id
+            .form-group
+              = label_tag :title
+              = text_field_tag :title
+            .form-group
+              = label_tag :body
+              = text_area_tag :body
+            .form-group
+              = label_tag :button_text
+              = text_field_tag :button_text
+            .form-group
+              = submit_tag "Insert", class: 'btn'
+
+

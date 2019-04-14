@@ -1,0 +1,23 @@
+= render "admin/header", page_title: "Images"
+.container.inner-top-xs.inner-bottom
+  .row
+    .col-md-3.inner-right-md
+      = render "admin/sidenav"
+    .col-md-9.border-left.inner-left-md
+      = form_for [:admin, @image] do |f|
+        = f.file_field :media
+        .row
+          .col-md-2
+            = f.submit :save, class: 'btn btn-primary'
+      %hr
+      .row
+        - @images.each_slice(4) do |images|
+          - images.each do |img|
+            .col-md-3
+              = image_tag img.media.url(:thumb), class: 'img-responsive'
+              %ul.list-inline
+                %li
+                  = img.id
+                %li
+                  = link_to admin_image_url(img), method: :delete, class: 'text-danger' do
+                    %i.fa.fa-trash

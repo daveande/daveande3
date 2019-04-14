@@ -1,0 +1,23 @@
+.modal-dialog
+  .modal-content
+    .modal-header
+      %button.close{"aria-label" => "Close", "data-dismiss" => "modal", :type => "button"}
+        %span{"aria-hidden" => "true"} &times;
+      %h4.modal-title
+        Add Image
+    .modal-body
+      -# uses dropzonejs
+      = form_tag admin_images_url, class: 'dropzone' do
+        .fallback
+          = file_field_tag "image[media]"
+      %hr
+      .image-container
+        - @images.each do |img|
+          .image-wrapper{id: "img-#{img.id}"}
+            = image_tag img.media.url(:thumb), class: 'img-responsive js-addImage', data: {url: img.media.url, id: img.id}
+            %ul.list-inline
+              %li
+                = img.id
+              %li
+                = link_to admin_image_url(img), method: :delete, remote: true, class: 'text-danger' do
+                  %i.fa.fa-trash

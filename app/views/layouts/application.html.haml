@@ -1,0 +1,51 @@
+!!!
+%html
+  %head
+    %meta{:name => "viewport", :content => "width=device-width, initial-scale=1.0"}
+    %title= content_for?(:title) ? yield(:title) : default_content(:title)
+    %meta{:name => "description", :content => "#{content_for?(:description) ? yield(:description) : default_content(:description)}"}
+    %meta{name: "keywords", content: "#{content_for?(:keywords) ? yield(:keywords) : default_content(:keywords)}"}
+    = yield(:meta)
+    = csrf_meta_tags
+    = stylesheet_link_tag 'application', media: 'all', 'data-turbolinks-track': 'reload'
+    = javascript_include_tag 'application', 'data-turbolinks-track': 'reload'
+    - if Rails.env.production? && !request.path.start_with?('/admin/')
+      = render "layouts/third_party/google_analytics"
+    = yield(:head)
+  %body
+    %nav.navbar.navbar-expand-lg.navbar-dark.bg-primary.mb-4
+      .container
+        %a.navbar-brand{:href => root_url} daveande
+        -#%button.navbar-toggler{"aria-controls" => "navbarTogglerDemo02", "aria-expanded" => "false", "aria-label" => "Toggle navigation", "data-target" => "#navbarTogglerDemo02", "data-toggle" => "collapse", :type => "button"}
+        -#  %span.navbar-toggler-icon
+        -#.collapse.navbar-collapse
+        -#  %ul.navbar-nav.mr-auto.mt-2.mt-lg-0
+        -#    %li.nav-item
+        -#      = link_to "Interviews", interviews_url, class: 'nav-link'
+        -#    %li.nav-item
+        -#      = link_to "Blog", posts_url, class: 'nav-link'
+        -#    %li.nav-item
+        -#      = link_to "Resources", books_url, class: 'nav-link'
+        -#    %li.nav-item
+        -#      = link_to "Subscribe", new_subscriber_url, remote: true, class: 'nav-link'
+    %main{:role => "main"}
+      = yield(:page_header)
+      = render 'layouts/messages'
+      = yield
+    %footer.pt-5.pb-3
+      .container
+        .row
+          .col-md
+            %ul.list-inline.m-0.text-center.text-muted.font-weight-light{style: 'font-size:0.75rem'}
+              %li.list-inline-item= "&#169; #{Date.today.year}, David Anderson".html_safe
+              %li.list-inline-item= link_to "Home", root_url, class: 'text-reset'
+              - if current_user && current_user.is_admin
+                %li.list-inline-item= link_to "Admin", admin_interviews_url, class: 'text-reset'
+              - if current_user
+                %li.list-inline-item= link_to "Logout", destroy_user_session_url, method: :delete, class: 'text-reset'
+
+    #subscribe-modal.modal.fade
+    #global-modal.modal.fade
+
+    - if Rails.env.production? && !request.path.start_with?('/admin/')
+      = render "layouts/third_party/drip"

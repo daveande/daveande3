@@ -1,0 +1,20 @@
+= set_meta_tag :title, @post.seo_title
+= set_meta_tag :description, @post.meta_description
+= set_meta_tag :keywords, @post.meta_keywords
+
+.container
+  .row
+    .col-md-8.offset-md-2
+      %h1.mb-1
+        = @post.title
+      %p.text-muted
+        %small
+          - published_at = @post.published_at || Time.zone.now
+          = published_at.in_time_zone("Eastern Time (US & Canada)").strftime("%b %d, %Y") 
+      %p
+        -# find_and_preserve to override haml's desire
+        -# to indent
+        = find_and_preserve do
+          = raw(@post.body_html)
+      .border-top.border-bottom.my-5.p-5
+        = render partial: 'layouts/third_party/disqus_thread', locals: { page_id: "post-#{@post.id}" , page_url: "#{post_url(@post)}" }

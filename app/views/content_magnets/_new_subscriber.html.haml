@@ -1,0 +1,26 @@
+.modal-dialog
+  .modal-content
+    .modal-body.tint-bg
+      %button.close{"aria-label" => "Close", "data-dismiss" => "modal", :type => "button"}
+        %span{"aria-hidden" => "true"} &times;
+      .text-center.p-lg
+        %h2
+          = @magnet.title
+        %p
+          = @magnet.description
+      .p-xl
+        .js-message#content-magnet-modal
+        = form_tag content_magnet_subscribe_url(@magnet), id: "js-contentMagSubscribeForm" do
+          .row
+            .col-md-12
+              = text_field_tag :name, nil, placeholder: "First Name", class: 'form-control', id: "js-contentMagName"
+          .row
+            .col-md-12
+              = text_field_tag :email, nil, placeholder: "Email", class: 'form-control', id: "js-contentMagEmail"
+          .row
+            .col-md-12
+              = submit_tag "Get Resource", class: "btn btn-tint-green", id: "js-contentMagSubmit", data: {disable_with: false}
+        .m-t-md
+          %p.text-small.text-center
+            No spam. Unsubscribe anytime.
+

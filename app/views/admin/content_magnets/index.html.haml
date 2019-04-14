@@ -1,0 +1,33 @@
+= render "admin/header", page_title: "Content Magnets"
+.container.inner-top-xs.inner-bottom
+  .row
+    .col-md-3.inner-right-md
+      = render "admin/sidenav"
+    .col-md-9.border-left.inner-left-md
+      = form_for [:admin, @magnet] do |f|
+        .row
+          .col-md-6
+            .form-group
+              = f.label :title
+              = f.text_field :title, class: 'form-control'
+            .form-group
+              = f.label :description
+              = f.text_area :description, class: 'form-control', rows: 8
+            .form-group
+              = f.label :asset
+              = f.file_field :asset
+        .row
+          .col-md-2
+            = f.submit :save, class: 'btn btn-primary'
+      %hr
+      .row
+        - @magnets.each_slice(4) do |magnets|
+          - magnets.each do |mag|
+            .col-md-3
+              .well
+                %p
+                  = mag.title
+                %ul.list-inline
+                  = link_to "View asset", admin_content_magnet_url(mag), target: "_blank", class: "btn btn-small"
+                  = link_to admin_content_magnet_url(mag), method: :delete, class: 'text-danger' do
+                    %i.fa.fa-trash

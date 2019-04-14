@@ -1,0 +1,6 @@
+$msgDiv = $('.js-message#content-magnet-modal');
+$msgDiv.addClass("alert alert-success").html("Thank you! The bonus content should be in your inbox shortly!");
+
+setTimeout(function() {
+  $msgDiv.removeClass('alert alert-success alert-danger').html("");
+}, 3000)

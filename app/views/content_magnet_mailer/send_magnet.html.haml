@@ -1,0 +1,10 @@
+%p
+  = "Hi #{@name},"
+%p
+  Here's the bonus content you requested. You can download it here:
+%p
+  = link_to @magnet.title, content_magnet_url(@magnet, magnet_token: @magnet.token)
+%p
+  Let me know what you think!
+%p
+  = "-David"

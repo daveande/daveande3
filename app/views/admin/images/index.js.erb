@@ -1,0 +1,6 @@
+$('#global-modal').html('<%= escape_javascript(render partial: 'index') %>');
+
+$('#global-modal').modal('show');
+
+var imgDropzone = new imageDropzone();
+imgDropzone.create('form.dropzone', '/admin/images', 'image[media]');

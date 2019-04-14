@@ -1,0 +1,53 @@
+- if @post.errors.any?
+  .alert.alert-danger
+    %button.close{"aria-hidden" => "true", "data-dismiss" => "alert", :type => "button"} &times;
+    %ul
+      - @post.errors.full_messages.each do |msg|
+        %li
+          = msg
+
+= form_for [:admin, @post] do |f|
+  .row
+    .col-md-8
+      .form-group
+        = f.label :title
+        = f.text_field :title, class: 'form-control'
+      .form-group
+        = f.label :subtitle
+        = f.text_area :subtitle, class: 'form-control', rows: 5
+      .form-group
+        = f.label :featured_image_id, "Featured Image ID"
+        = f.select :featured_image_id, Image.order('id desc').pluck(:id), {include_blank: true}, class: 'form-control'
+  .row
+    .col-md-12
+      = f.label :body_markdown, "Body"
+      ~ f.text_area :body_markdown, class: 'form-control', id: "body-markdown"
+  .row
+    .col-md-8
+      %h4 SEO Tags
+      .form-group
+        = f.label :seo_title, "SEO Title"
+        = f.text_field :seo_title, class: 'form-control'
+      .form-group
+        = f.label :meta_keywords
+        = f.text_field :meta_keywords, class: 'form-control'
+      .form-group
+        = f.label :meta_description
+        = f.text_area :meta_description, class: 'form-control'
+  .row
+    .col-md-5
+      .form-group
+        .checkbox
+          = f.label :is_published do
+            = f.check_box :is_published
+            Publish?
+  .row
+    .col-md-5
+      .form-group
+        .checkbox
+          = f.label :show_on_index do
+            = f.check_box :show_on_index
+            Show on index
+  .row
+    .col-md-3
+      = f.submit "Save", class: 'btn btn-primary'

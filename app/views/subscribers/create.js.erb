@@ -1,0 +1,11 @@
+$msgDiv = $('.js-message#<%=@msg_location_id%>');
+
+<% if @response.status == 200 %>
+    $msgDiv.addClass("alert alert-success").html("Thank you! You are now subscribed to our list!");
+<% else %>
+    $msgDiv.addClass("alert alert-danger").html('<%= escape_javascript((@response.body["errors"].first["message"] rescue "Oops! There was an error subscribing. Please try again or email us for help.")) %>');
+<% end %>
+
+setTimeout(function() {
+  $msgDiv.removeClass('alert alert-success alert-danger').html("");
+}, 3000)

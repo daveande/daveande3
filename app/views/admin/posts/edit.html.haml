@@ -1,0 +1,10 @@
+= render "admin/header", page_title: "Edit Post"
+.container.inner-top-xs.inner-bottom
+  .row
+    .col-md-3.inner-right-md
+      = render "admin/sidenav"
+    .col-md-9.border-left.inner-left-md
+      .row
+        .col-md-12.m-b-md
+          = link_to "View post", post_url(@post)
+      = render "form"

@@ -1,0 +1,16 @@
+= render "admin/header", page_title: "Posts"
+.container.inner-top-xs.inner-bottom
+  .row
+    .col-md-3.inner-right-md
+      = render "admin/sidenav"
+    .col-md-9.border-left.inner-left-md
+      = link_to new_admin_post_url, class: "btn btn-primary" do
+        %i.fa.fa-plus
+        New
+      %ul.p-l-0.m-t-sm
+        - @posts.each do |p|
+          %li
+            = link_to p.title, edit_admin_post_url(p.id)
+            - if p.published_at
+              %span.text-muted
+                = p.published_at.in_time_zone("Eastern Time (US & Canada)").strftime("%m/%d/%Y")

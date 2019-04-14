@@ -1,0 +1,19 @@
+.modal-dialog
+  .modal-content
+    .modal-header
+      %button.close{"aria-label" => "Close", "data-dismiss" => "modal", :type => "button"}
+        %span{"aria-hidden" => "true"} &times;
+      %h4.modal-title
+        Insert Content Magnet
+    .modal-body
+      .row
+        - @magnets.each_slice(3) do |magnets|
+          - magnets.each do |mag|
+            .col-md-4
+              .well
+                %p
+                  = mag.title
+                %ul.list-inline
+                  %li= link_to "Insert Link", "#", class: 'js-addContentUpgradeLink', data: {url: content_magnet_subscribe_url(mag), title: mag.title}
+                  %li= link_to "Insert Callout", new_admin_insert_content_magnet_url(id: mag.id), remote: true
+

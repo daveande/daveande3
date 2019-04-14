@@ -1,0 +1,20 @@
+$theme-colors: (
+ "primary": #2187bb
+);
+$line-height-base: 1.75;
+
+@import "bootstrap"; //bootstrap gem
+@import "font-awesome"; //font-awesome-rails gem
+@import "simplemde.min"; //in main vendor directory
+@import "dropzone.min"; //in main vendor directory
+@import "code/default";
+//@import "code/monokai";
+
+pre { 
+  padding: 1rem;
+  @extend .border;
+}
+code.highlighter-rouge { 
+  @extend .bg-light; 
+  @extend .p-1;
+}
