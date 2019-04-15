@@ -6,7 +6,7 @@ class Post < ApplicationRecord
   
   acts_as_taggable
 
-  after_save :convert_markdown_to_html, if: :body_markdown_changed?
+  after_commit :convert_markdown_to_html, if: :body_markdown_was_changed?
 
   belongs_to :featured_image, class_name: "Image"
 
@@ -37,10 +37,17 @@ class Post < ApplicationRecord
   end
 
   def convert_markdown_to_html
+    puts "CONVERTING TO HTML"
     html = Kramdown::Document.new(body_markdown, {
       syntax_highlighter: :rouge
     }).to_html
 
     update_columns(body_html: html)
   end
+
+  private
+    
+    def body_markdown_was_changed?
+      saved_changes["body_markdown"].present?
+    end
 end

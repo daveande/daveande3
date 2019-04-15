@@ -11,10 +11,16 @@ $line-height-base: 1.75;
 //@import "code/monokai";
 
 pre { 
-  padding: 1rem;
+  @extend .p-3;
   @extend .border;
-}
-code.highlighter-rouge { 
   @extend .bg-light; 
-  @extend .p-1;
+  &.CodeMirror-line {
+    padding: inherit !important;
+    border: inherit !important;
+    background: inherit !important;
+  }
 }
+//code.highlighter-rouge { 
+//  @extend .bg-light; 
+//  @extend .p-1;
+//}
