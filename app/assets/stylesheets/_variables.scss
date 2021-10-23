@@ -1,0 +1,36 @@
+$font-family-sans-serif: "Barlow", -apple-system, BlinkMacSystemFont, "Segoe UI", "Oxygen", "Ubuntu", "Cantarell", "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif !default;
+//$font-family-sans-serif: "Lato", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji" !default;
+//$headings-font-family: "Noto Serif", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji" !default;   
+$headings-color: #2c343c;
+
+$body-color: #6b747a;
+
+$black:        $headings-color !default;
+$gray-25:      rgba($black, .015) !default;
+$gray-50:      rgba($black, .03) !default;
+$gray-100:     rgba($black, .06) !default;
+$gray-200:     rgba($black, .1) !default;
+$gray-300:     rgba($black, .2) !default;
+$gray-400:     rgba($black, .3) !default;
+$gray-500:     rgba($black, .4) !default;
+$gray-600:     rgba($black, .5) !default;
+$gray-700:     rgba($black, .6) !default;
+$gray-800:     rgba($black, .8) !default;
+$gray-900:     rgba($black, .9) !default;
+
+$theme-colors: (
+ "primary": #2d72d9,
+ "secondary": #8897AA
+);
+$line-height-base: 1.75;
+
+$navbar-padding-y: 2.5rem;
+$navbar-padding-x: 0;
+$navbar-brand-font-size: 1.5rem;
+$navbar-light-color: #9ba6ad;
+$navbar-light-hover-color: #2d72d9;
+$navbar-light-active-color: #2d72d9;
+$navbar-light-disabled-color: $gray-300;
+$navbar-light-brand-color: $headings-color;
+$navbar-light-brand-hover-color: $navbar-light-active-color !default;
+

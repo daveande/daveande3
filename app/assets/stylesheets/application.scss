@@ -1,12 +1,11 @@
-$theme-colors: (
- "primary": #2187bb
-);
-$line-height-base: 1.75;
+@import 'variables';
 
 @import "bootstrap"; //bootstrap gem
 @import "font-awesome"; //font-awesome-rails gem
 @import "simplemde.min"; //in main vendor directory
 @import "dropzone.min"; //in main vendor directory
+
+// Components
 @import "code/default";
 //@import "code/monokai";
 
@@ -20,7 +19,46 @@ pre {
     background: inherit !important;
   }
 }
-//code.highlighter-rouge { 
-//  @extend .bg-light; 
-//  @extend .p-1;
-//}
+.resume-subheading {
+  @extend .h5;
+  @extend .font-weight-light;
+  @extend .text-muted;
+  @extend .text-uppercase;
+  @extend .d-inline-block;
+  @extend .border-bottom;
+  @extend .pb-3;
+  @extend .mb-4;
+  letter-spacing: 0.5rem;
+}
+.resume-section-sidebar {
+  margin-bottom: ($spacer * 3);
+}
+
+ul.list-inline.list-slash {
+  li.list-inline-item { margin-right: 0; }
+  li:nth-child(n+2):before {
+    margin-right: 1rem;
+    margin-left: 1rem;
+    content: "/";
+  }
+}
+
+html {
+  border: 15px solid $primary;
+  box-sizing: border-box;
+}
+::selection {
+    background: #e4edfa;
+    color: #2c343c;
+    text-shadow: none;
+}
+.badge.badge-tag {
+  background-color: $gray-200;
+  color: $gray-600;
+  font-weight: lighter;
+  &:hover {
+    background-color: $gray-300;
+  }
+}
+a i.fa.fa-linkedin-square:hover { color: #0A66C2; }
+a i.fa.fa-github:hover { color: black; }

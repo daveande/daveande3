@@ -8,7 +8,7 @@ class Post < ApplicationRecord
 
   after_commit :convert_markdown_to_html, if: :body_markdown_was_changed?
 
-  belongs_to :featured_image, class_name: "Image"
+  belongs_to :featured_image, class_name: "Image", optional: true
 
   validates :slug, uniqueness: true
 

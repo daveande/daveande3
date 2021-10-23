@@ -1,8 +1,7 @@
-.container
-  .row
-    .col-md-12
-      - flash.each do |name, msg|
-        - if msg.is_a?(String)
-          %div.m-t-md{:class => "alert alert-#{['notice', 'success'].include?(name.to_s) ? 'success' : 'danger'}"}
-            %button.close{"aria-hidden" => "true", "data-dismiss" => "alert", :type => "button"} &times;
-            = content_tag :div, msg, :id => "flash_#{name}"
+.row
+  .col-md-12
+    - flash.each do |name, msg|
+      - if msg.is_a?(String)
+        %div.m-t-md{:class => "alert alert-#{['notice', 'success'].include?(name.to_s) ? 'success' : 'danger'}"}
+          %button.close{"aria-hidden" => "true", "data-dismiss" => "alert", :type => "button"} &times;
+          = content_tag :div, msg, :id => "flash_#{name}"

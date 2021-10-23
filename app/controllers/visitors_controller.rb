@@ -4,4 +4,8 @@ class VisitorsController < ApplicationController
     @posts = Post.on_index.published.order('published_at desc')
   end
 
+  def resume
+  end
+
+
 end
