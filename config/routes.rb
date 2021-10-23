@@ -20,4 +20,5 @@ Rails.application.routes.draw do
   get 'sitemap.xml', to: 'sitemaps#index', :format => "xml", :as => :sitemap
   
   root to: 'visitors#index'
+  get 'resume', to: 'visitors#resume'
 end

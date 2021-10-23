@@ -1,8 +1,8 @@
 source 'https://rubygems.org'
 
 # Bundle edge Rails instead: gem 'rails', github: 'rails/rails'
-ruby '2.4.1'
-gem 'rails', '~> 5.0'
+ruby '3.0.2'
+gem 'rails', '~> 6.0'
 gem 'puma', '~> 3.0'
 gem 'sass-rails', '~> 5.0'
 # Use Uglifier as compressor for JavaScript assets
@@ -27,9 +27,10 @@ gem 'friendly_id'
 gem 'rouge', '~> 1.10', '>= 1.10.1' #syntax highlighting
 gem 'kramdown' #version of markdown
 gem "paperclip", "~> 5.0.0"
-gem 'aws-sdk', '~> 2.3.0'
+#gem 'aws-sdk', '~> 2.3.0'
+gem 'aws-sdk-s3', '~> 1'
 gem 'drip-ruby', require: 'drip'
-gem 'acts-as-taggable-on', '~> 6.0'
+gem 'acts-as-taggable-on', '~> 8.0'
 gem 'rack-timeout'
 
 group :development do
@@ -47,7 +48,7 @@ group :development do
 end
 
 group :development, :test do
-  gem 'factory_girl_rails'
+  gem 'factory_bot_rails'
   gem 'faker'
   gem 'rspec-rails'
   # Call 'byebug' anywhere in the code to stop execution and get a debugger console
