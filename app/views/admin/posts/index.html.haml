@@ -1,16 +1,24 @@
 = render "admin/header", page_title: "Posts"
 .container.inner-top-xs.inner-bottom
   .row
-    .col-md-3.inner-right-md
+    .col-md-3
       = render "admin/sidenav"
-    .col-md-9.border-left.inner-left-md
-      = link_to new_admin_post_url, class: "btn btn-primary" do
+    .col-md-9.border-left.pl-md-5
+      = link_to new_admin_post_url, class: "btn btn-primary mb-3" do
         %i.fa.fa-plus
         New
-      %ul.p-l-0.m-t-sm
-        - @posts.each do |p|
-          %li
-            = link_to p.title, edit_admin_post_url(p.id)
-            - if p.published_at
-              %span.text-muted
-                = p.published_at.in_time_zone("Eastern Time (US & Canada)").strftime("%m/%d/%Y")
+      - @posts.each do |post|
+        .row.mb-1
+          .col-auto
+            = link_to post.title, edit_admin_post_url(post.id)
+            - if post.published_at
+              %small.text-muted
+                - published_at = post.published_at || Time.zone.now
+                = " - #{published_at.in_time_zone("Eastern Time (US & Canada)").strftime("%b %d, %Y")}"
+      -#%ul.p-l-0.m-t-sm
+      -#  - @posts.each do |p|
+      -#    %li
+      -#      = link_to p.title, edit_admin_post_url(p.id)
+      -#      - if p.published_at
+      -#        %span.text-muted
+      -#          = p.published_at.in_time_zone("Eastern Time (US & Canada)").strftime("%m/%d/%Y")

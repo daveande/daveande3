@@ -18,6 +18,10 @@
       .form-group
         = f.label :featured_image_id, "Featured Image ID"
         = f.select :featured_image_id, Image.order('id desc').pluck(:id), {include_blank: true}, class: 'form-control'
+      .form-group
+        = f.label :tag_list
+        = f.text_field :tag_list, value: f.object.tag_list.to_s, class: 'form-control'
+        
   .row
     .col-md-12
       = f.label :body_markdown, "Body"

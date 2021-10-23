@@ -1,0 +1,2214 @@
+id;title;subtitle;body_markdown;body_html;published_at;created_at;updated_at;featured_image_id;seo_title;meta_description;meta_keywords;slug;show_on_index;type
+5;How to share tests for before_actions in Rails;RSpec offers a way to share tests across multiple classes to test shared functionality. The default Rails test setup doesn't offer this feature, however, so we'll implement a custom way to share tests.;"Checkout the example below to learn how I share tests using Rails testing in a similar way to RSpec's [shared examples](https://relishapp.com/rspec/rspec-core/docs/example-groups/shared-examples)
+
+For this site I have an admin area where I manage the blog posts and site images. My routes look something like:
+
+~~~ ruby 
+namespace :admin do
+  resources :posts
+  resources :images
+end
+~~~
+
+I've created an `Admin::BaseController` that the other admin controllers inherit from and I put my shared code in there.
+For example, I have two before_actions that all admin controllers need. The first one makes sure that a user is logged in (I'm
+using Devise for user authentication, so I have access to its `authenticate_user!` method) and the second
+one confirms that the logged in user is a site admin. 
+
+My set up looks like this:
+
+~~~ ruby
+# app/controllers/admin/base_controller.rb
+class Admin::BaseController < ApplicationController
+  before_action :authenticate_user!
+  before_action :authorize_admin!
+
+  def authorize_admin!
+    unless current_user.is_admin
+      flash[:error] = ""Access Denied""
+      redirect_to root_url
+    end
+  end
+end
+~~~
+
+~~~ ruby
+# app/controllers/admin/posts_controller.rb
+class Admin::PostsController < Admin::BaseController
+  # index, new, create, edit, etc. actions
+end
+~~~
+
+~~~ ruby
+# app/controllers/admin/images_controller.rb
+class Admin::ImagesController < Admin::BaseController
+  # index, new, create, edit, etc. actions
+end
+~~~
+
+How do you test that each admin controller makes sure that we have a current_user and that the current_user
+is an admin? I could write two tests and copy and paste those test for every admin controller and each of 
+its actions, but all that repetition doesn't feel right. I want to use something like RSpec's [shared examples](https://relishapp.com/rspec/rspec-core/docs/example-groups/shared-examples),
+but since I'm using the default Rails testing setup I don't have an equivalent feature. I'll build my own way to share tests!
+
+I'll define two class methods in my `test/test_helper.rb` file for the `ActiveSupport::TestCase` class. Each method will take a block, 
+execute the block, and then make the appropriate assertions. Now from each `test/controllers/admin` file, I can use these two methods
+and simply pass in the request that I want to test. Nice!
+
+~~~ ruby
+# test/test_helper.rb
+class ActiveSupport::TestCase
+  include Devise::Test::IntegrationHelpers
+
+  fixtures :all
+
+  def self.it_requires_authentication(&block)
+    test ""requires authentication"" do
+      instance_exec(&block)
+      assert_redirected_to new_user_session_path
+    end
+  end
+
+  def self.it_requires_admin(&block)
+    test ""requires an admin user"" do
+      sign_in users(:david)
+      instance_exec(&block)
+      assert_redirected_to root_url
+      assert_equal 'Access Denied', flash[:error]
+    end
+  end
+end
+~~~
+
+~~~ ruby
+# test/controllers/admin/posts_controller_test.rb
+class Admin::PostsControllerTest < ActionDispatch::IntegrationTest
+  it_requires_authentication { get admin_posts_url }
+  it_requires_admin { get admin_posts_url }
+
+  test ""should get index"" do
+    david = users(:david)
+    david.update!(is_admin: true)
+    sign_in david
+    get admin_posts_url
+    assert_response :success
+  end
+end
+~~~
+
+~~~ ruby
+# test/controllers/admin/images_controller_test.rb
+class Admin::ImagesControllerTest < ActionDispatch::IntegrationTest
+  it_requires_authentication { get admin_posts_url }
+  it_requires_admin { get admin_posts_url }
+
+  test ""should get index"" do
+    david = users(:david)
+    david.update!(is_admin: true)
+    sign_in david
+    get admin_images_url
+    assert_response :success
+  end
+end
+~~~
+
+I have to give credit where credit is due! This implementation was inspired by [this blog post.](https://anti-pattern.com/shared-examples-with-minitest)";"<p>Checkout the example below to learn how I share tests using Rails testing in a similar way to RSpec’s <a href=""https://relishapp.com/rspec/rspec-core/docs/example-groups/shared-examples"">shared examples</a></p>
+
+<p>For this site I have an admin area where I manage the blog posts and site images. My routes look something like:</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""n"">namespace</span> <span class=""ss"">:admin</span> <span class=""k"">do</span>
+  <span class=""n"">resources</span> <span class=""ss"">:posts</span>
+  <span class=""n"">resources</span> <span class=""ss"">:images</span>
+<span class=""k"">end</span>
+</code></pre>
+</div>
+
+<p>I’ve created an <code>Admin::BaseController</code> that the other admin controllers inherit from and I put my shared code in there.
+For example, I have two before_actions that all admin controllers need. The first one makes sure that a user is logged in (I’m
+using Devise for user authentication, so I have access to its <code>authenticate_user!</code> method) and the second
+one confirms that the logged in user is a site admin.</p>
+
+<p>My set up looks like this:</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1""># app/controllers/admin/base_controller.rb</span>
+<span class=""k"">class</span> <span class=""nc"">Admin</span><span class=""o"">::</span><span class=""no"">BaseController</span> <span class=""o"">&lt;</span> <span class=""no"">ApplicationController</span>
+  <span class=""n"">before_action</span> <span class=""ss"">:authenticate_user!</span>
+  <span class=""n"">before_action</span> <span class=""ss"">:authorize_admin!</span>
+
+  <span class=""k"">def</span> <span class=""nf"">authorize_admin!</span>
+    <span class=""k"">unless</span> <span class=""n"">current_user</span><span class=""p"">.</span><span class=""nf"">is_admin</span>
+      <span class=""n"">flash</span><span class=""p"">[</span><span class=""ss"">:error</span><span class=""p"">]</span> <span class=""o"">=</span> <span class=""s2"">""Access Denied""</span>
+      <span class=""n"">redirect_to</span> <span class=""n"">root_url</span>
+    <span class=""k"">end</span>
+  <span class=""k"">end</span>
+<span class=""k"">end</span>
+</code></pre>
+</div>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1""># app/controllers/admin/posts_controller.rb</span>
+<span class=""k"">class</span> <span class=""nc"">Admin</span><span class=""o"">::</span><span class=""no"">PostsController</span> <span class=""o"">&lt;</span> <span class=""no"">Admin</span><span class=""o"">::</span><span class=""no"">BaseController</span>
+  <span class=""c1""># index, new, create, edit, etc. actions</span>
+<span class=""k"">end</span>
+</code></pre>
+</div>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1""># app/controllers/admin/images_controller.rb</span>
+<span class=""k"">class</span> <span class=""nc"">Admin</span><span class=""o"">::</span><span class=""no"">ImagesController</span> <span class=""o"">&lt;</span> <span class=""no"">Admin</span><span class=""o"">::</span><span class=""no"">BaseController</span>
+  <span class=""c1""># index, new, create, edit, etc. actions</span>
+<span class=""k"">end</span>
+</code></pre>
+</div>
+
+<p>How do you test that each admin controller makes sure that we have a current_user and that the current_user
+is an admin? I could write two tests and copy and paste those test for every admin controller and each of 
+its actions, but all that repetition doesn’t feel right. I want to use something like RSpec’s <a href=""https://relishapp.com/rspec/rspec-core/docs/example-groups/shared-examples"">shared examples</a>,
+but since I’m using the default Rails testing setup I don’t have an equivalent feature. I’ll build my own way to share tests!</p>
+
+<p>I’ll define two class methods in my <code>test/test_helper.rb</code> file for the <code>ActiveSupport::TestCase</code> class. Each method will take a block, 
+execute the block, and then make the appropriate assertions. Now from each <code>test/controllers/admin</code> file, I can use these two methods
+and simply pass in the request that I want to test. Nice!</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1""># test/test_helper.rb</span>
+<span class=""k"">class</span> <span class=""nc"">ActiveSupport</span><span class=""o"">::</span><span class=""no"">TestCase</span>
+  <span class=""kp"">include</span> <span class=""no"">Devise</span><span class=""o"">::</span><span class=""no"">Test</span><span class=""o"">::</span><span class=""no"">IntegrationHelpers</span>
+
+  <span class=""n"">fixtures</span> <span class=""ss"">:all</span>
+
+  <span class=""k"">def</span> <span class=""nc"">self</span><span class=""o"">.</span><span class=""nf"">it_requires_authentication</span><span class=""p"">(</span><span class=""o"">&amp;</span><span class=""n"">block</span><span class=""p"">)</span>
+    <span class=""nb"">test</span> <span class=""s2"">""requires authentication""</span> <span class=""k"">do</span>
+      <span class=""n"">instance_exec</span><span class=""p"">(</span><span class=""o"">&amp;</span><span class=""n"">block</span><span class=""p"">)</span>
+      <span class=""n"">assert_redirected_to</span> <span class=""n"">new_user_session_path</span>
+    <span class=""k"">end</span>
+  <span class=""k"">end</span>
+
+  <span class=""k"">def</span> <span class=""nc"">self</span><span class=""o"">.</span><span class=""nf"">it_requires_admin</span><span class=""p"">(</span><span class=""o"">&amp;</span><span class=""n"">block</span><span class=""p"">)</span>
+    <span class=""nb"">test</span> <span class=""s2"">""requires an admin user""</span> <span class=""k"">do</span>
+      <span class=""n"">sign_in</span> <span class=""n"">users</span><span class=""p"">(</span><span class=""ss"">:david</span><span class=""p"">)</span>
+      <span class=""n"">instance_exec</span><span class=""p"">(</span><span class=""o"">&amp;</span><span class=""n"">block</span><span class=""p"">)</span>
+      <span class=""n"">assert_redirected_to</span> <span class=""n"">root_url</span>
+      <span class=""n"">assert_equal</span> <span class=""s1"">'Access Denied'</span><span class=""p"">,</span> <span class=""n"">flash</span><span class=""p"">[</span><span class=""ss"">:error</span><span class=""p"">]</span>
+    <span class=""k"">end</span>
+  <span class=""k"">end</span>
+<span class=""k"">end</span>
+</code></pre>
+</div>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1""># test/controllers/admin/posts_controller_test.rb</span>
+<span class=""k"">class</span> <span class=""nc"">Admin</span><span class=""o"">::</span><span class=""no"">PostsControllerTest</span> <span class=""o"">&lt;</span> <span class=""no"">ActionDispatch</span><span class=""o"">::</span><span class=""no"">IntegrationTest</span>
+  <span class=""n"">it_requires_authentication</span> <span class=""p"">{</span> <span class=""n"">get</span> <span class=""n"">admin_posts_url</span> <span class=""p"">}</span>
+  <span class=""n"">it_requires_admin</span> <span class=""p"">{</span> <span class=""n"">get</span> <span class=""n"">admin_posts_url</span> <span class=""p"">}</span>
+
+  <span class=""nb"">test</span> <span class=""s2"">""should get index""</span> <span class=""k"">do</span>
+    <span class=""n"">david</span> <span class=""o"">=</span> <span class=""n"">users</span><span class=""p"">(</span><span class=""ss"">:david</span><span class=""p"">)</span>
+    <span class=""n"">david</span><span class=""p"">.</span><span class=""nf"">update!</span><span class=""p"">(</span><span class=""ss"">is_admin: </span><span class=""kp"">true</span><span class=""p"">)</span>
+    <span class=""n"">sign_in</span> <span class=""n"">david</span>
+    <span class=""n"">get</span> <span class=""n"">admin_posts_url</span>
+    <span class=""n"">assert_response</span> <span class=""ss"">:success</span>
+  <span class=""k"">end</span>
+<span class=""k"">end</span>
+</code></pre>
+</div>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1""># test/controllers/admin/images_controller_test.rb</span>
+<span class=""k"">class</span> <span class=""nc"">Admin</span><span class=""o"">::</span><span class=""no"">ImagesControllerTest</span> <span class=""o"">&lt;</span> <span class=""no"">ActionDispatch</span><span class=""o"">::</span><span class=""no"">IntegrationTest</span>
+  <span class=""n"">it_requires_authentication</span> <span class=""p"">{</span> <span class=""n"">get</span> <span class=""n"">admin_posts_url</span> <span class=""p"">}</span>
+  <span class=""n"">it_requires_admin</span> <span class=""p"">{</span> <span class=""n"">get</span> <span class=""n"">admin_posts_url</span> <span class=""p"">}</span>
+
+  <span class=""nb"">test</span> <span class=""s2"">""should get index""</span> <span class=""k"">do</span>
+    <span class=""n"">david</span> <span class=""o"">=</span> <span class=""n"">users</span><span class=""p"">(</span><span class=""ss"">:david</span><span class=""p"">)</span>
+    <span class=""n"">david</span><span class=""p"">.</span><span class=""nf"">update!</span><span class=""p"">(</span><span class=""ss"">is_admin: </span><span class=""kp"">true</span><span class=""p"">)</span>
+    <span class=""n"">sign_in</span> <span class=""n"">david</span>
+    <span class=""n"">get</span> <span class=""n"">admin_images_url</span>
+    <span class=""n"">assert_response</span> <span class=""ss"">:success</span>
+  <span class=""k"">end</span>
+<span class=""k"">end</span>
+</code></pre>
+</div>
+
+<p>I have to give credit where credit is due! This implementation was inspired by <a href=""https://anti-pattern.com/shared-examples-with-minitest"">this blog post.</a></p>
+";2019-04-24 19:43:12.031843;2019-04-24 19:40:16.150042;2019-05-17 21:04:03.515486;;How to test shared before_actions with Rails controller tests;A custom solution to share tests in multiple test classes to test shared before_actions such as authenticate_user!;Rails test, RSpec shared examples;how-to-share-tests-for-before_actions-in-rails;t;Article
+9;Crop photos with Rails, Paperclip, and cropperjs;A short tutorial to show how to crop paperclip photo attachments in a Rails app using cropperjs;"[In a previous post](https://www.everclimb.co/blog/crop-photos-with-rails-paperclip-and-jcrop), I shared how I integrated the [Jcrop jQuery](http://deepliquid.com/content/Jcrop_Download.html) library to offer a cropping interface on the frontend which updated hidden fields in a form that was submitted to our controller to crop the photo using the paperclip gem. The below tutorial is essentially the same, but in this case we'll use the [cropperjs](https://github.com/fengyuanchen/cropperjs) library's [jQuery plugin](https://github.com/fengyuanchen/jquery-cropper) rather than JCrop.
+
+In this case, we'll try to do something like this:
+1. Add cropperjs to our app and add `crop_images` routes
+2. Get cropperjs working on our page
+3. Submit cropperjs coordinates to our server
+4. Use coordinates submitted to crop photo using paperclip
+
+## 1. Basic Setup
+I'm going to assume you have a User model and that you've already successfully setup paperclip. It should look something like this:
+
+~~~ ruby
+# app/models/user.rb
+
+class User < ActiveRecord::Base
+  has_attached_file :photo,
+    styles: {full: '512x512>', thumb: '256x256#'},
+    default_url: ""/:class/:attachment/default.png""
+end
+~~~
+
+Download (or copy and paste the contents of the files into your files) the [cropperjs library from here](https://github.com/fengyuanchen/cropperjs/blob/master/dist/cropper.js), [the cropperjs CSS file](https://github.com/fengyuanchen/cropperjs/blob/master/dist/cropper.css), and the [cropperjs jquery-plugin from here](https://github.com/fengyuanchen/jquery-cropper/blob/master/dist/jquery-cropper.js).  Then add the `cropper.js`, `jquery-cropper.js`, and `cropper.css` files to your app's vendor directory. The js files will go in `vendor/assets/javascripts/cropper.js` and `vendor/assets/javascripts/jquery-cropper.js`. The CSS file should go here `vendor/assets/stylesheets/cropper.css`.  Now we need to add those assets to our asset manifest files.
+
+~~~ javascript
+// app/assets/javascripts/application.js
+
+//= require cropper.js
+//= require jquery-cropper.js
+~~~
+
+~~~ css
+/* app/assets/stylesheets/application.css */
+
+*= require cropper
+~~~
+
+Let's add routes for the pages where a user can crop an image. 
+
+~~~ ruby
+# config/routes.rb
+
+resources :users do
+  resources :crop_images, only: [:new, :create]
+end
+~~~
+
+## 2. Get Jcrop working
+First we need to create our `CropImagesController` and the `crop_images_controller#new` view. We're using Bootstrap so our view will have some familiar layout classes. 
+
+~~~ ruby 
+# app/controllers/crop_images_controller.rb
+
+class CropImagesController < ApplicationController
+  def new
+    @user = User.find(params[:user_id])
+  end
+end
+~~~
+
+~~~ haml
+// app/views/crop_images/new.html.haml
+
+.container
+  .row
+    .col-md-12
+      %h3.m-b-md
+        = t('.crop_image')
+      - if @user.photo.exists?
+        .row
+          .col-md-9
+            #spinner
+            #crop-stage.m-b-sm{style: 'max-height: 500px;'}
+              = image_tag @user.photo.url(:auto_orient), id: 'crop-image', style: 'max-width:none;max-height:none;'
+            .crop-buttons
+              .btn-group
+                %button.btn.btn-default{data: {method: 'rotate', option: '-90'}, title: 'Rotate Left'}
+                  %i.fa.fa-rotate-left
+                %button.btn.btn-default{data: {method: 'rotate', option: '90'}, title: 'Rotate Right'}
+                  %i.fa.fa-rotate-right
+            = form_tag crop_images_url do
+              = hidden_field_tag :redirect_path, params[:redirect_path]
+              = hidden_field_tag :object_id, @user.id
+              = hidden_field_tag :coords_x, nil, id: 'coords-x'
+              = hidden_field_tag :coords_y, nil, id: 'coords-y'
+              = hidden_field_tag :coords_h, nil, id: 'coords-h'
+              = hidden_field_tag :coords_w, nil, id: 'coords-w'
+              = hidden_field_tag :coords_rotate, nil, id: 'coords-rotate'
+
+              = submit_tag t('aaa.rest.save'), class: 'btn btn-primary m-h-md', data: {disable_with: ""...""}
+      - else 
+        %p.text-danger.m-b-lg
+          = t('.user_does_not_have_image_to_crop')
+
+~~~
+
+In our view we check to make sure the user has a photo and display a message if he/she doesn't. If the user does have a photo, then we show the original image using `image_tag` and give the image an ID of `#crop-image`. I've added some inline styles to set the max-height.
+
+We've also added a form to the page which will submit to the `crop_images_controller#create` action when the user hits save. The form has hidden fields for the cropping coordinates and the rotation, initially, and those are the fields we'll set in our javascript.
+
+Add a new file to `app/assets/javascripts` (you'll have to add this file to your `application.js` manifest file if you don't use `//= require_tree .`).
+
+~~~ javascript
+// app/assets/javascripts/image_cropper.js
+
+ImageCropper = function(elementId) {
+  var self = this;
+
+  var $image = $(elementId);
+
+  var updateCoords = function(event) {
+    $('#coords-x').val(event.detail.x);
+    $('#coords-y').val(event.detail.y);
+    $('#coords-w').val(event.detail.width);
+    $('#coords-h').val(event.detail.height);
+    $('#coords-rotate').val(event.detail.rotate);
+  }
+
+  $image.cropper({
+    viewMode: 1,
+    aspectRatio: 1,
+    movable: false,
+    scaleable: false,
+    zoomable: false,
+    zoomOnTouch: false,
+    zoomOnWheel: false,
+    crop: updateCoords,
+  })
+
+  var clickCropButtonsListener = function() {
+    $('.crop-buttons').on('click', '[data-method]', function() {
+      $image.cropper('rotate', $(this).data('option')); 
+    });
+  }
+
+  self.initListeners = function() {
+    clickCropButtonsListener();
+  }
+}
+
+$(document).ready(function() {
+  if ( $('#crop-image').length > 0 ) {
+    cropper = new ImageCropper('#crop-image');
+    cropper.initListeners();
+  }
+});
+
+~~~
+
+Our `ImageCropper` class initializes cropper with a few options. We're setting the aspectRatio to 1 and disabling the ability move, scale, and zoom in on the image. We also set the crop callback to our updateCoords function.  The updateCoords method takes the coordinates that cropper passes in and sets our hidden fields to the appropriate values.  We've also added a listener for our rotate buttons, `clickCropButtonsListener`. When a rotate button is clicked, we call the cropper's rotate method which rotates the photo and will call the `crop()` method (which subsequently calls our `updatedCoords` callback. At this point, cropperjs should be working! If you navigate to your `/users/:user_id/crop_images/new` page, you should see the user photo and be able to crop it. Now what happens when we hit save?
+
+## Submit cropper coordinates to the server
+When you hit save on the `/users/:user_id/crop_images/new`, it will submit a post request to the `crop_images_controller#create` action with the coordinate params. The `create` action needs submit the coordinate information to our user model and to paperclip.
+
+~~~ ruby
+# app/controllers/crop_images_controller
+
+  def new
+    @user = User.find(params[:user_id])
+  end
+
+  def create
+    @user = User.find(params[:user_id])
+    if @user.photo.exists? &&
+        params[:coords_x].present? && 
+        params[:coords_y].present? && 
+        params[:coords_w].present? && 
+        params[:coords_h].present?
+
+      @user.photo_crop_x = params[:coords_x]
+      @user.photo_crop_y = params[:coords_y]
+      @user.photo_crop_w = params[:coords_w]
+      @user.photo_crop_h = params[:coords_h]
+      @user.photo_crop_rotate = params[:coords_rotate].present? ? params[:coords_rotate] : 0
+      
+      @user.photo = File.open(@user.photo.path(:original))
+      @user.save
+      flash[:success] = ""Successfully Saved""
+      redirect_to user_url(@user)
+    else
+      flash[:notice] = ""You must submit cropping dimensions""
+      redirect_to new_user_crop_image_url(user_id: @user.id)
+    end
+  end
+
+~~~ 
+
+In the above `create` action we first check to make sure that the user has a photo and that all the coordinate params have been submitted. If they haven't we redirect to the `new` page with an error message. If the user does have a photo and the coordinate params are submitted we assign the user's virtual cropping attributes with the given data. The user's ""virtual cropping attributes"" are available to us by using Rails' `attr_accessor` in our user model like so:
+
+~~~ ruby
+# app/models/user.rb
+
+class User < ActiveRecord::Base
+  attr_accessor :photo_crop_x, :photo_crop_y, :photo_crop_w, :photo_crop_h, :photo_crop_rotate
+end
+~~~
+
+After setting those attributes in our controller with the provided data, we call `save` on the user. During the save process, paperclip will now have access to the cropping coordinates. We'll write a custom processor to perform the cropping.
+
+## Use coordinates submitted to crop photo using paperclip
+The final piece to the puzzle is to write a custom processor for paperclip. Custom processor's go in your `lib/paperclip_processors` directory and allow you to transform the picture/attachment in any way you see fit. In this case, our processor will inherit from Paperclip's Thumbnail processor and will look like this:
+
+~~~ ruby 
+# lib/paperclip_processors/cropper.rb
+module Paperclip
+  class Cropper < Thumbnail
+    def cropping?
+      target.photo_crop_w.present? && 
+        target.photo_crop_h.present? &&
+        target.photo_crop_x.present? &&
+        target.photo_crop_y.present? 
+    end
+
+    def target
+      @attachment.instance
+    end
+
+    def transformation_command
+      return super unless cropping?
+      crop_command = [
+        ""-rotate #{target.photo_crop_rotate.to_f} -crop""
+        ""#{target.photo_crop_w.to_f}x"" \
+        ""#{target.photo_crop_h.to_f}+"" \
+        ""#{target.photo_crop_x.to_f}+"" \
+        ""#{target.photo_crop_y.to_f}"",
+        ""+repage""
+      ]
+      crop_command + super
+    end
+  end
+end
+~~~
+
+The `transformation_command` first checks to make sure that we're cropping the photo by checking if our target (in this case or user object) has all the virtual cropping attributes present.  If those aren't present, then we defer to `super`. If the cropping attributes are present we create an [ImageMagick](http://www.imagemagick.org/script/command-line-options.php#crop) `rotate` and `crop` commands which will rotate and crop the photo to our desired dimensions and then pass the cropped photo onto subsequent paperclip processing. 
+
+## Conclusion
+And that's it! With these pieces in place, you can now crop and rotate photos using Rails, paperclip, and cropperjs. You should be able to navigate to the cropping page, select the cropping area on the photo, hit save, and finally have a cropped photo saved to your user model. Building a feature like the above can be a bit overwhelming when you first start, but breaking it up into individual steps before you set out to implement can keep you on the right track before trying to piece it all together.
+";"<p><a href=""https://www.everclimb.co/blog/crop-photos-with-rails-paperclip-and-jcrop"">In a previous post</a>, I shared how I integrated the <a href=""http://deepliquid.com/content/Jcrop_Download.html"">Jcrop jQuery</a> library to offer a cropping interface on the frontend which updated hidden fields in a form that was submitted to our controller to crop the photo using the paperclip gem. The below tutorial is essentially the same, but in this case we’ll use the <a href=""https://github.com/fengyuanchen/cropperjs"">cropperjs</a> library’s <a href=""https://github.com/fengyuanchen/jquery-cropper"">jQuery plugin</a> rather than JCrop.</p>
+
+<p>In this case, we’ll try to do something like this:
+1. Add cropperjs to our app and add <code>crop_images</code> routes
+2. Get cropperjs working on our page
+3. Submit cropperjs coordinates to our server
+4. Use coordinates submitted to crop photo using paperclip</p>
+
+<h2 id=""basic-setup"">1. Basic Setup</h2>
+<p>I’m going to assume you have a User model and that you’ve already successfully setup paperclip. It should look something like this:</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1""># app/models/user.rb</span>
+
+<span class=""k"">class</span> <span class=""nc"">User</span> <span class=""o"">&lt;</span> <span class=""no"">ActiveRecord</span><span class=""o"">::</span><span class=""no"">Base</span>
+  <span class=""n"">has_attached_file</span> <span class=""ss"">:photo</span><span class=""p"">,</span>
+    <span class=""ss"">styles: </span><span class=""p"">{</span><span class=""ss"">full: </span><span class=""s1"">'512x512&gt;'</span><span class=""p"">,</span> <span class=""ss"">thumb: </span><span class=""s1"">'256x256#'</span><span class=""p"">},</span>
+    <span class=""ss"">default_url: </span><span class=""s2"">""/:class/:attachment/default.png""</span>
+<span class=""k"">end</span>
+</code></pre>
+</div>
+
+<p>Download (or copy and paste the contents of the files into your files) the <a href=""https://github.com/fengyuanchen/cropperjs/blob/master/dist/cropper.js"">cropperjs library from here</a>, <a href=""https://github.com/fengyuanchen/cropperjs/blob/master/dist/cropper.css"">the cropperjs CSS file</a>, and the <a href=""https://github.com/fengyuanchen/jquery-cropper/blob/master/dist/jquery-cropper.js"">cropperjs jquery-plugin from here</a>.  Then add the <code>cropper.js</code>, <code>jquery-cropper.js</code>, and <code>cropper.css</code> files to your app’s vendor directory. The js files will go in <code>vendor/assets/javascripts/cropper.js</code> and <code>vendor/assets/javascripts/jquery-cropper.js</code>. The CSS file should go here <code>vendor/assets/stylesheets/cropper.css</code>.  Now we need to add those assets to our asset manifest files.</p>
+
+<div class=""language-javascript highlighter-rouge""><pre class=""highlight""><code><span class=""c1"">// app/assets/javascripts/application.js</span>
+
+<span class=""c1"">//= require cropper.js</span>
+<span class=""c1"">//= require jquery-cropper.js</span>
+</code></pre>
+</div>
+
+<div class=""language-css highlighter-rouge""><pre class=""highlight""><code><span class=""c"">/* app/assets/stylesheets/application.css */</span>
+
+<span class=""o"">*=</span> <span class=""nt"">require</span> <span class=""nt"">cropper</span>
+</code></pre>
+</div>
+
+<p>Let’s add routes for the pages where a user can crop an image.</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1""># config/routes.rb</span>
+
+<span class=""n"">resources</span> <span class=""ss"">:users</span> <span class=""k"">do</span>
+  <span class=""n"">resources</span> <span class=""ss"">:crop_images</span><span class=""p"">,</span> <span class=""ss"">only: </span><span class=""p"">[</span><span class=""ss"">:new</span><span class=""p"">,</span> <span class=""ss"">:create</span><span class=""p"">]</span>
+<span class=""k"">end</span>
+</code></pre>
+</div>
+
+<h2 id=""get-jcrop-working"">2. Get Jcrop working</h2>
+<p>First we need to create our <code>CropImagesController</code> and the <code>crop_images_controller#new</code> view. We’re using Bootstrap so our view will have some familiar layout classes.</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1""># app/controllers/crop_images_controller.rb</span>
+
+<span class=""k"">class</span> <span class=""nc"">CropImagesController</span> <span class=""o"">&lt;</span> <span class=""no"">ApplicationController</span>
+  <span class=""k"">def</span> <span class=""nf"">new</span>
+    <span class=""vi"">@user</span> <span class=""o"">=</span> <span class=""no"">User</span><span class=""p"">.</span><span class=""nf"">find</span><span class=""p"">(</span><span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:user_id</span><span class=""p"">])</span>
+  <span class=""k"">end</span>
+<span class=""k"">end</span>
+</code></pre>
+</div>
+
+<div class=""language-haml highlighter-rouge""><pre class=""highlight""><code><span class=""c"">// app/views/crop_images/new.html.haml
+</span>
+<span class=""nc"">.container</span>
+  <span class=""nc"">.row</span>
+    <span class=""nc"">.col-md-12</span>
+      <span class=""nt"">%h3</span><span class=""nc"">.m-b-md</span>
+        <span class=""p"">=</span> <span class=""n"">t</span><span class=""p"">(</span><span class=""s1"">'.crop_image'</span><span class=""p"">)</span>
+      <span class=""p"">-</span> <span class=""k"">if</span> <span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">photo</span><span class=""p"">.</span><span class=""nf"">exists?</span>
+        <span class=""nc"">.row</span>
+          <span class=""nc"">.col-md-9</span>
+            <span class=""nf"">#spinner</span>
+            <span class=""nf"">#crop-stage</span><span class=""nc"">.m-b-sm</span><span class=""p"">{</span><span class=""ss"">style: </span><span class=""s1"">'max-height: 500px;'</span><span class=""p"">}</span>
+              <span class=""p"">=</span> <span class=""n"">image_tag</span> <span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">photo</span><span class=""p"">.</span><span class=""nf"">url</span><span class=""p"">(</span><span class=""ss"">:auto_orient</span><span class=""p"">),</span> <span class=""ss"">id: </span><span class=""s1"">'crop-image'</span><span class=""p"">,</span> <span class=""ss"">style: </span><span class=""s1"">'max-width:none;max-height:none;'</span>
+            <span class=""nc"">.crop-buttons</span>
+              <span class=""nc"">.btn-group</span>
+                <span class=""nt"">%button</span><span class=""nc"">.btn.btn-default</span><span class=""p"">{</span><span class=""ss"">data: </span><span class=""p"">{</span><span class=""ss"">method: </span><span class=""s1"">'rotate'</span><span class=""p"">,</span> <span class=""ss"">option: </span><span class=""s1"">'-90'</span><span class=""p"">}</span>, title: 'Rotate Left'}
+                  <span class=""nt"">%i</span><span class=""nc"">.fa.fa-rotate-left</span>
+                <span class=""nt"">%button</span><span class=""nc"">.btn.btn-default</span><span class=""p"">{</span><span class=""ss"">data: </span><span class=""p"">{</span><span class=""ss"">method: </span><span class=""s1"">'rotate'</span><span class=""p"">,</span> <span class=""ss"">option: </span><span class=""s1"">'90'</span><span class=""p"">}</span>, title: 'Rotate Right'}
+                  <span class=""nt"">%i</span><span class=""nc"">.fa.fa-rotate-right</span>
+            <span class=""p"">=</span> <span class=""n"">form_tag</span> <span class=""n"">crop_images_url</span> <span class=""k"">do</span>
+              <span class=""p"">=</span> <span class=""n"">hidden_field_tag</span> <span class=""ss"">:redirect_path</span><span class=""p"">,</span> <span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:redirect_path</span><span class=""p"">]</span>
+              <span class=""p"">=</span> <span class=""n"">hidden_field_tag</span> <span class=""ss"">:object_id</span><span class=""p"">,</span> <span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">id</span>
+              <span class=""p"">=</span> <span class=""n"">hidden_field_tag</span> <span class=""ss"">:coords_x</span><span class=""p"">,</span> <span class=""kp"">nil</span><span class=""p"">,</span> <span class=""ss"">id: </span><span class=""s1"">'coords-x'</span>
+              <span class=""p"">=</span> <span class=""n"">hidden_field_tag</span> <span class=""ss"">:coords_y</span><span class=""p"">,</span> <span class=""kp"">nil</span><span class=""p"">,</span> <span class=""ss"">id: </span><span class=""s1"">'coords-y'</span>
+              <span class=""p"">=</span> <span class=""n"">hidden_field_tag</span> <span class=""ss"">:coords_h</span><span class=""p"">,</span> <span class=""kp"">nil</span><span class=""p"">,</span> <span class=""ss"">id: </span><span class=""s1"">'coords-h'</span>
+              <span class=""p"">=</span> <span class=""n"">hidden_field_tag</span> <span class=""ss"">:coords_w</span><span class=""p"">,</span> <span class=""kp"">nil</span><span class=""p"">,</span> <span class=""ss"">id: </span><span class=""s1"">'coords-w'</span>
+              <span class=""p"">=</span> <span class=""n"">hidden_field_tag</span> <span class=""ss"">:coords_rotate</span><span class=""p"">,</span> <span class=""kp"">nil</span><span class=""p"">,</span> <span class=""ss"">id: </span><span class=""s1"">'coords-rotate'</span>
+
+              <span class=""p"">=</span> <span class=""n"">submit_tag</span> <span class=""n"">t</span><span class=""p"">(</span><span class=""s1"">'aaa.rest.save'</span><span class=""p"">),</span> <span class=""ss"">class: </span><span class=""s1"">'btn btn-primary m-h-md'</span><span class=""p"">,</span> <span class=""ss"">data: </span><span class=""p"">{</span><span class=""ss"">disable_with: </span><span class=""s2"">""...""</span><span class=""p"">}</span>
+      <span class=""p"">-</span> <span class=""k"">else</span><span class=""err""> </span>
+        <span class=""nt"">%p</span><span class=""nc"">.text-danger.m-b-lg</span>
+          <span class=""p"">=</span> <span class=""n"">t</span><span class=""p"">(</span><span class=""s1"">'.user_does_not_have_image_to_crop'</span><span class=""p"">)</span>
+
+</code></pre>
+</div>
+
+<p>In our view we check to make sure the user has a photo and display a message if he/she doesn’t. If the user does have a photo, then we show the original image using <code>image_tag</code> and give the image an ID of <code>#crop-image</code>. I’ve added some inline styles to set the max-height.</p>
+
+<p>We’ve also added a form to the page which will submit to the <code>crop_images_controller#create</code> action when the user hits save. The form has hidden fields for the cropping coordinates and the rotation, initially, and those are the fields we’ll set in our javascript.</p>
+
+<p>Add a new file to <code>app/assets/javascripts</code> (you’ll have to add this file to your <code>application.js</code> manifest file if you don’t use <code>//= require_tree .</code>).</p>
+
+<div class=""language-javascript highlighter-rouge""><pre class=""highlight""><code><span class=""c1"">// app/assets/javascripts/image_cropper.js</span>
+
+<span class=""nx"">ImageCropper</span> <span class=""o"">=</span> <span class=""kd"">function</span><span class=""p"">(</span><span class=""nx"">elementId</span><span class=""p"">)</span> <span class=""p"">{</span>
+  <span class=""kd"">var</span> <span class=""nx"">self</span> <span class=""o"">=</span> <span class=""k"">this</span><span class=""p"">;</span>
+
+  <span class=""kd"">var</span> <span class=""nx"">$image</span> <span class=""o"">=</span> <span class=""nx"">$</span><span class=""p"">(</span><span class=""nx"">elementId</span><span class=""p"">);</span>
+
+  <span class=""kd"">var</span> <span class=""nx"">updateCoords</span> <span class=""o"">=</span> <span class=""kd"">function</span><span class=""p"">(</span><span class=""nx"">event</span><span class=""p"">)</span> <span class=""p"">{</span>
+    <span class=""nx"">$</span><span class=""p"">(</span><span class=""s1"">'#coords-x'</span><span class=""p"">).</span><span class=""nx"">val</span><span class=""p"">(</span><span class=""nx"">event</span><span class=""p"">.</span><span class=""nx"">detail</span><span class=""p"">.</span><span class=""nx"">x</span><span class=""p"">);</span>
+    <span class=""nx"">$</span><span class=""p"">(</span><span class=""s1"">'#coords-y'</span><span class=""p"">).</span><span class=""nx"">val</span><span class=""p"">(</span><span class=""nx"">event</span><span class=""p"">.</span><span class=""nx"">detail</span><span class=""p"">.</span><span class=""nx"">y</span><span class=""p"">);</span>
+    <span class=""nx"">$</span><span class=""p"">(</span><span class=""s1"">'#coords-w'</span><span class=""p"">).</span><span class=""nx"">val</span><span class=""p"">(</span><span class=""nx"">event</span><span class=""p"">.</span><span class=""nx"">detail</span><span class=""p"">.</span><span class=""nx"">width</span><span class=""p"">);</span>
+    <span class=""nx"">$</span><span class=""p"">(</span><span class=""s1"">'#coords-h'</span><span class=""p"">).</span><span class=""nx"">val</span><span class=""p"">(</span><span class=""nx"">event</span><span class=""p"">.</span><span class=""nx"">detail</span><span class=""p"">.</span><span class=""nx"">height</span><span class=""p"">);</span>
+    <span class=""nx"">$</span><span class=""p"">(</span><span class=""s1"">'#coords-rotate'</span><span class=""p"">).</span><span class=""nx"">val</span><span class=""p"">(</span><span class=""nx"">event</span><span class=""p"">.</span><span class=""nx"">detail</span><span class=""p"">.</span><span class=""nx"">rotate</span><span class=""p"">);</span>
+  <span class=""p"">}</span>
+
+  <span class=""nx"">$image</span><span class=""p"">.</span><span class=""nx"">cropper</span><span class=""p"">({</span>
+    <span class=""na"">viewMode</span><span class=""p"">:</span> <span class=""mi"">1</span><span class=""p"">,</span>
+    <span class=""na"">aspectRatio</span><span class=""p"">:</span> <span class=""mi"">1</span><span class=""p"">,</span>
+    <span class=""na"">movable</span><span class=""p"">:</span> <span class=""kc"">false</span><span class=""p"">,</span>
+    <span class=""na"">scaleable</span><span class=""p"">:</span> <span class=""kc"">false</span><span class=""p"">,</span>
+    <span class=""na"">zoomable</span><span class=""p"">:</span> <span class=""kc"">false</span><span class=""p"">,</span>
+    <span class=""na"">zoomOnTouch</span><span class=""p"">:</span> <span class=""kc"">false</span><span class=""p"">,</span>
+    <span class=""na"">zoomOnWheel</span><span class=""p"">:</span> <span class=""kc"">false</span><span class=""p"">,</span>
+    <span class=""na"">crop</span><span class=""p"">:</span> <span class=""nx"">updateCoords</span><span class=""p"">,</span>
+  <span class=""p"">})</span>
+
+  <span class=""kd"">var</span> <span class=""nx"">clickCropButtonsListener</span> <span class=""o"">=</span> <span class=""kd"">function</span><span class=""p"">()</span> <span class=""p"">{</span>
+    <span class=""nx"">$</span><span class=""p"">(</span><span class=""s1"">'.crop-buttons'</span><span class=""p"">).</span><span class=""nx"">on</span><span class=""p"">(</span><span class=""s1"">'click'</span><span class=""p"">,</span> <span class=""s1"">'[data-method]'</span><span class=""p"">,</span> <span class=""kd"">function</span><span class=""p"">()</span> <span class=""p"">{</span>
+      <span class=""nx"">$image</span><span class=""p"">.</span><span class=""nx"">cropper</span><span class=""p"">(</span><span class=""s1"">'rotate'</span><span class=""p"">,</span> <span class=""nx"">$</span><span class=""p"">(</span><span class=""k"">this</span><span class=""p"">).</span><span class=""nx"">data</span><span class=""p"">(</span><span class=""s1"">'option'</span><span class=""p"">));</span> 
+    <span class=""p"">});</span>
+  <span class=""p"">}</span>
+
+  <span class=""nx"">self</span><span class=""p"">.</span><span class=""nx"">initListeners</span> <span class=""o"">=</span> <span class=""kd"">function</span><span class=""p"">()</span> <span class=""p"">{</span>
+    <span class=""nx"">clickCropButtonsListener</span><span class=""p"">();</span>
+  <span class=""p"">}</span>
+<span class=""p"">}</span>
+
+<span class=""nx"">$</span><span class=""p"">(</span><span class=""nb"">document</span><span class=""p"">).</span><span class=""nx"">ready</span><span class=""p"">(</span><span class=""kd"">function</span><span class=""p"">()</span> <span class=""p"">{</span>
+  <span class=""k"">if</span> <span class=""p"">(</span> <span class=""nx"">$</span><span class=""p"">(</span><span class=""s1"">'#crop-image'</span><span class=""p"">).</span><span class=""nx"">length</span> <span class=""o"">&gt;</span> <span class=""mi"">0</span> <span class=""p"">)</span> <span class=""p"">{</span>
+    <span class=""nx"">cropper</span> <span class=""o"">=</span> <span class=""k"">new</span> <span class=""nx"">ImageCropper</span><span class=""p"">(</span><span class=""s1"">'#crop-image'</span><span class=""p"">);</span>
+    <span class=""nx"">cropper</span><span class=""p"">.</span><span class=""nx"">initListeners</span><span class=""p"">();</span>
+  <span class=""p"">}</span>
+<span class=""p"">});</span>
+
+</code></pre>
+</div>
+
+<p>Our <code>ImageCropper</code> class initializes cropper with a few options. We’re setting the aspectRatio to 1 and disabling the ability move, scale, and zoom in on the image. We also set the crop callback to our updateCoords function.  The updateCoords method takes the coordinates that cropper passes in and sets our hidden fields to the appropriate values.  We’ve also added a listener for our rotate buttons, <code>clickCropButtonsListener</code>. When a rotate button is clicked, we call the cropper’s rotate method which rotates the photo and will call the <code>crop()</code> method (which subsequently calls our <code>updatedCoords</code> callback. At this point, cropperjs should be working! If you navigate to your <code>/users/:user_id/crop_images/new</code> page, you should see the user photo and be able to crop it. Now what happens when we hit save?</p>
+
+<h2 id=""submit-cropper-coordinates-to-the-server"">Submit cropper coordinates to the server</h2>
+<p>When you hit save on the <code>/users/:user_id/crop_images/new</code>, it will submit a post request to the <code>crop_images_controller#create</code> action with the coordinate params. The <code>create</code> action needs submit the coordinate information to our user model and to paperclip.</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1""># app/controllers/crop_images_controller</span>
+
+  <span class=""k"">def</span> <span class=""nf"">new</span>
+    <span class=""vi"">@user</span> <span class=""o"">=</span> <span class=""no"">User</span><span class=""p"">.</span><span class=""nf"">find</span><span class=""p"">(</span><span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:user_id</span><span class=""p"">])</span>
+  <span class=""k"">end</span>
+
+  <span class=""k"">def</span> <span class=""nf"">create</span>
+    <span class=""vi"">@user</span> <span class=""o"">=</span> <span class=""no"">User</span><span class=""p"">.</span><span class=""nf"">find</span><span class=""p"">(</span><span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:user_id</span><span class=""p"">])</span>
+    <span class=""k"">if</span> <span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">photo</span><span class=""p"">.</span><span class=""nf"">exists?</span> <span class=""o"">&amp;&amp;</span>
+        <span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:coords_x</span><span class=""p"">].</span><span class=""nf"">present?</span> <span class=""o"">&amp;&amp;</span> 
+        <span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:coords_y</span><span class=""p"">].</span><span class=""nf"">present?</span> <span class=""o"">&amp;&amp;</span> 
+        <span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:coords_w</span><span class=""p"">].</span><span class=""nf"">present?</span> <span class=""o"">&amp;&amp;</span> 
+        <span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:coords_h</span><span class=""p"">].</span><span class=""nf"">present?</span>
+
+      <span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">photo_crop_x</span> <span class=""o"">=</span> <span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:coords_x</span><span class=""p"">]</span>
+      <span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">photo_crop_y</span> <span class=""o"">=</span> <span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:coords_y</span><span class=""p"">]</span>
+      <span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">photo_crop_w</span> <span class=""o"">=</span> <span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:coords_w</span><span class=""p"">]</span>
+      <span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">photo_crop_h</span> <span class=""o"">=</span> <span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:coords_h</span><span class=""p"">]</span>
+      <span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">photo_crop_rotate</span> <span class=""o"">=</span> <span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:coords_rotate</span><span class=""p"">].</span><span class=""nf"">present?</span> <span class=""p"">?</span> <span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:coords_rotate</span><span class=""p"">]</span> <span class=""p"">:</span> <span class=""mi"">0</span>
+      
+      <span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">photo</span> <span class=""o"">=</span> <span class=""no"">File</span><span class=""p"">.</span><span class=""nf"">open</span><span class=""p"">(</span><span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">photo</span><span class=""p"">.</span><span class=""nf"">path</span><span class=""p"">(</span><span class=""ss"">:original</span><span class=""p"">))</span>
+      <span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">save</span>
+      <span class=""n"">flash</span><span class=""p"">[</span><span class=""ss"">:success</span><span class=""p"">]</span> <span class=""o"">=</span> <span class=""s2"">""Successfully Saved""</span>
+      <span class=""n"">redirect_to</span> <span class=""n"">user_url</span><span class=""p"">(</span><span class=""vi"">@user</span><span class=""p"">)</span>
+    <span class=""k"">else</span>
+      <span class=""n"">flash</span><span class=""p"">[</span><span class=""ss"">:notice</span><span class=""p"">]</span> <span class=""o"">=</span> <span class=""s2"">""You must submit cropping dimensions""</span>
+      <span class=""n"">redirect_to</span> <span class=""n"">new_user_crop_image_url</span><span class=""p"">(</span><span class=""ss"">user_id: </span><span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">id</span><span class=""p"">)</span>
+    <span class=""k"">end</span>
+  <span class=""k"">end</span>
+
+</code></pre>
+</div>
+
+<p>In the above <code>create</code> action we first check to make sure that the user has a photo and that all the coordinate params have been submitted. If they haven’t we redirect to the <code>new</code> page with an error message. If the user does have a photo and the coordinate params are submitted we assign the user’s virtual cropping attributes with the given data. The user’s “virtual cropping attributes” are available to us by using Rails’ <code>attr_accessor</code> in our user model like so:</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1""># app/models/user.rb</span>
+
+<span class=""k"">class</span> <span class=""nc"">User</span> <span class=""o"">&lt;</span> <span class=""no"">ActiveRecord</span><span class=""o"">::</span><span class=""no"">Base</span>
+  <span class=""kp"">attr_accessor</span> <span class=""ss"">:photo_crop_x</span><span class=""p"">,</span> <span class=""ss"">:photo_crop_y</span><span class=""p"">,</span> <span class=""ss"">:photo_crop_w</span><span class=""p"">,</span> <span class=""ss"">:photo_crop_h</span><span class=""p"">,</span> <span class=""ss"">:photo_crop_rotate</span>
+<span class=""k"">end</span>
+</code></pre>
+</div>
+
+<p>After setting those attributes in our controller with the provided data, we call <code>save</code> on the user. During the save process, paperclip will now have access to the cropping coordinates. We’ll write a custom processor to perform the cropping.</p>
+
+<h2 id=""use-coordinates-submitted-to-crop-photo-using-paperclip"">Use coordinates submitted to crop photo using paperclip</h2>
+<p>The final piece to the puzzle is to write a custom processor for paperclip. Custom processor’s go in your <code>lib/paperclip_processors</code> directory and allow you to transform the picture/attachment in any way you see fit. In this case, our processor will inherit from Paperclip’s Thumbnail processor and will look like this:</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1""># lib/paperclip_processors/cropper.rb</span>
+<span class=""k"">module</span> <span class=""nn"">Paperclip</span>
+  <span class=""k"">class</span> <span class=""nc"">Cropper</span> <span class=""o"">&lt;</span> <span class=""no"">Thumbnail</span>
+    <span class=""k"">def</span> <span class=""nf"">cropping?</span>
+      <span class=""n"">target</span><span class=""p"">.</span><span class=""nf"">photo_crop_w</span><span class=""p"">.</span><span class=""nf"">present?</span> <span class=""o"">&amp;&amp;</span> 
+        <span class=""n"">target</span><span class=""p"">.</span><span class=""nf"">photo_crop_h</span><span class=""p"">.</span><span class=""nf"">present?</span> <span class=""o"">&amp;&amp;</span>
+        <span class=""n"">target</span><span class=""p"">.</span><span class=""nf"">photo_crop_x</span><span class=""p"">.</span><span class=""nf"">present?</span> <span class=""o"">&amp;&amp;</span>
+        <span class=""n"">target</span><span class=""p"">.</span><span class=""nf"">photo_crop_y</span><span class=""p"">.</span><span class=""nf"">present?</span> 
+    <span class=""k"">end</span>
+
+    <span class=""k"">def</span> <span class=""nf"">target</span>
+      <span class=""vi"">@attachment</span><span class=""p"">.</span><span class=""nf"">instance</span>
+    <span class=""k"">end</span>
+
+    <span class=""k"">def</span> <span class=""nf"">transformation_command</span>
+      <span class=""k"">return</span> <span class=""k"">super</span> <span class=""k"">unless</span> <span class=""n"">cropping?</span>
+      <span class=""n"">crop_command</span> <span class=""o"">=</span> <span class=""p"">[</span>
+        <span class=""s2"">""-rotate </span><span class=""si"">#{</span><span class=""n"">target</span><span class=""p"">.</span><span class=""nf"">photo_crop_rotate</span><span class=""p"">.</span><span class=""nf"">to_f</span><span class=""si"">}</span><span class=""s2""> -crop""</span>
+        <span class=""s2"">""</span><span class=""si"">#{</span><span class=""n"">target</span><span class=""p"">.</span><span class=""nf"">photo_crop_w</span><span class=""p"">.</span><span class=""nf"">to_f</span><span class=""si"">}</span><span class=""s2"">x""</span> <span class=""p"">\</span>
+        <span class=""s2"">""</span><span class=""si"">#{</span><span class=""n"">target</span><span class=""p"">.</span><span class=""nf"">photo_crop_h</span><span class=""p"">.</span><span class=""nf"">to_f</span><span class=""si"">}</span><span class=""s2"">+""</span> <span class=""p"">\</span>
+        <span class=""s2"">""</span><span class=""si"">#{</span><span class=""n"">target</span><span class=""p"">.</span><span class=""nf"">photo_crop_x</span><span class=""p"">.</span><span class=""nf"">to_f</span><span class=""si"">}</span><span class=""s2"">+""</span> <span class=""p"">\</span>
+        <span class=""s2"">""</span><span class=""si"">#{</span><span class=""n"">target</span><span class=""p"">.</span><span class=""nf"">photo_crop_y</span><span class=""p"">.</span><span class=""nf"">to_f</span><span class=""si"">}</span><span class=""s2"">""</span><span class=""p"">,</span>
+        <span class=""s2"">""+repage""</span>
+      <span class=""p"">]</span>
+      <span class=""n"">crop_command</span> <span class=""o"">+</span> <span class=""k"">super</span>
+    <span class=""k"">end</span>
+  <span class=""k"">end</span>
+<span class=""k"">end</span>
+</code></pre>
+</div>
+
+<p>The <code>transformation_command</code> first checks to make sure that we’re cropping the photo by checking if our target (in this case or user object) has all the virtual cropping attributes present.  If those aren’t present, then we defer to <code>super</code>. If the cropping attributes are present we create an <a href=""http://www.imagemagick.org/script/command-line-options.php#crop"">ImageMagick</a> <code>rotate</code> and <code>crop</code> commands which will rotate and crop the photo to our desired dimensions and then pass the cropped photo onto subsequent paperclip processing.</p>
+
+<h2 id=""conclusion"">Conclusion</h2>
+<p>And that’s it! With these pieces in place, you can now crop and rotate photos using Rails, paperclip, and cropperjs. You should be able to navigate to the cropping page, select the cropping area on the photo, hit save, and finally have a cropped photo saved to your user model. Building a feature like the above can be a bit overwhelming when you first start, but breaking it up into individual steps before you set out to implement can keep you on the right track before trying to piece it all together.</p>
+";2019-05-07 20:16:53.82709;2019-05-07 20:16:53.964591;2019-05-17 21:02:23.566593;;How to crop and rotate photos with Rails, Paperclip, and Cropperjs;A short tutorial to show how to crop paperclip photo attachments in a Rails app using cropperjs;cropperjs tutorial, paperclip, rails, crop paperclip photos, cropperjs;crop-photos-with-rails-paperclip-and-cropperjs;t;Article
+2;Fix PG Bad Connection;I recently got a PG ConnectionBad - could not connect to server Connection refused error while trying to connect to Rails server or console. I was able to fix it with a few easy steps.;"I've had this error bite me a few times, but I think I have finally found an easy way to fix it. When connecting to my local Rails server
+or Rails console, I'll see something like `PG::ConnectionBad - could not connect to server: Connection refused`. I've noticed that this has happened
+after my computer shut down unexpectedly, perhaps because Postgres didn't delete the PID file.
+
+This [Stack Overflow answer][stackoverflow] has an excellent explanation that worked well for me and is pretty straight forward.
+
+First, locate your postgres directory. If you installed via HomeBrew:
+
+~~~ sh
+$ cd /usr/local/var/postgres/
+~~~
+
+Within that directory there should be a `server.log` file that will have additional information. Open that file and look at the last lines. You'll want to look for `FATAL:  lock file ""postmaster.pid"" already exists HINT:  Is another postmaster (PID 347) running in data directory ""/usr/local/var/postgres""?`.
+If you see that, then you've confirmed that the problem is as a result of Postgres not deleting the PID file. Remove the PID file!
+
+~~~ sh
+$ rm postmaster.pid
+~~~
+
+Finally you'll have to restart your Postgres server. The Stack Overflow answer says that you can do that with:
+
+~~~ sh
+$ launchctl unload homebrew.mxcl.postgresql.plist
+$ launchctl load -w homebrew.mxcl.postgresql.plist
+~~~~
+
+That may work for you, but I found that my .plist file was in a different directory and had to run:
+
+~~~ sh
+$ launchctl unload /usr/local/Cellar/postgresql/9.3.5_1/homebrew.mxcl.postgresql.plist
+$ launchctl load -w /usr/local/Cellar/postgresql/9.3.5_1/homebrew.mxcl.postgresql.plist
+~~~~
+
+I'm not sure if that's a result of the way I installed Postgres or not.
+
+[stackoverflow]: http://stackoverflow.com/a/21420719";"<p>I’ve had this error bite me a few times, but I think I have finally found an easy way to fix it. When connecting to my local Rails server
+or Rails console, I’ll see something like <code>PG::ConnectionBad - could not connect to server: Connection refused</code>. I’ve noticed that this has happened
+after my computer shut down unexpectedly, perhaps because Postgres didn’t delete the PID file.</p>
+
+<p>This <a href=""http://stackoverflow.com/a/21420719"">Stack Overflow answer</a> has an excellent explanation that worked well for me and is pretty straight forward.</p>
+
+<p>First, locate your postgres directory. If you installed via HomeBrew:</p>
+
+<div class=""language-sh highlighter-rouge""><pre class=""highlight""><code><span class=""gp"">$ </span><span class=""nb"">cd</span> /usr/local/var/postgres/
+</code></pre>
+</div>
+
+<p>Within that directory there should be a <code>server.log</code> file that will have additional information. Open that file and look at the last lines. You’ll want to look for <code>FATAL:  lock file ""postmaster.pid"" already exists HINT:  Is another postmaster (PID 347) running in data directory ""/usr/local/var/postgres""?</code>.
+If you see that, then you’ve confirmed that the problem is as a result of Postgres not deleting the PID file. Remove the PID file!</p>
+
+<div class=""language-sh highlighter-rouge""><pre class=""highlight""><code><span class=""gp"">$ </span>rm postmaster.pid
+</code></pre>
+</div>
+
+<p>Finally you’ll have to restart your Postgres server. The Stack Overflow answer says that you can do that with:</p>
+
+<div class=""language-sh highlighter-rouge""><pre class=""highlight""><code><span class=""gp"">$ </span>launchctl unload homebrew.mxcl.postgresql.plist
+<span class=""gp"">$ </span>launchctl load -w homebrew.mxcl.postgresql.plist
+</code></pre>
+</div>
+
+<p>That may work for you, but I found that my .plist file was in a different directory and had to run:</p>
+
+<div class=""language-sh highlighter-rouge""><pre class=""highlight""><code><span class=""gp"">$ </span>launchctl unload /usr/local/Cellar/postgresql/9.3.5_1/homebrew.mxcl.postgresql.plist
+<span class=""gp"">$ </span>launchctl load -w /usr/local/Cellar/postgresql/9.3.5_1/homebrew.mxcl.postgresql.plist
+</code></pre>
+</div>
+
+<p>I’m not sure if that’s a result of the way I installed Postgres or not.</p>
+
+";2019-04-20 18:14:31.290517;2019-04-20 18:14:31.633894;2019-05-17 21:04:47.615572;;Fix PG Bad Connection;I recently got a PG ConnectionBad - could not connect to server Connection refused error while trying to connect to Rails server or console. I was able to fix it with a few easy steps.;postgresql, bad connection, rails postgresql error;fix-pg-bad-connection;f;Article
+8;Paperclip run processors for specific style;When using a custom Paperclip processor, how do you have it only run with a specific style?;"If you have a Paperclip custom processor that you want to run on specific styles, you can change the `has_attached_file` styles hash so that each style includes a processors array. For example, in the code below only the `full` and `thumb` styles will be sent to the `cropper` processor.
+
+~~~ ruby 
+  has_attached_file :photo,
+    styles: {
+      auto_orient: {}, 
+      full:  {geometry: '512x512>', processors: [:cropper]}, 
+      thumb: {geometry: '256x256>', processors: [:cropper]}
+    },
+    default_url: ""/:class/:attachment/default.png""
+~~~";"<p>If you have a Paperclip custom processor that you want to run on specific styles, you can change the <code>has_attached_file</code> styles hash so that each style includes a processors array. For example, in the code below only the <code>full</code> and <code>thumb</code> styles will be sent to the <code>cropper</code> processor.</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code>  <span class=""n"">has_attached_file</span> <span class=""ss"">:photo</span><span class=""p"">,</span>
+    <span class=""ss"">styles: </span><span class=""p"">{</span>
+      <span class=""ss"">auto_orient: </span><span class=""p"">{},</span> 
+      <span class=""ss"">full:  </span><span class=""p"">{</span><span class=""ss"">geometry: </span><span class=""s1"">'512x512&gt;'</span><span class=""p"">,</span> <span class=""ss"">processors: </span><span class=""p"">[</span><span class=""ss"">:cropper</span><span class=""p"">]},</span> 
+      <span class=""ss"">thumb: </span><span class=""p"">{</span><span class=""ss"">geometry: </span><span class=""s1"">'256x256&gt;'</span><span class=""p"">,</span> <span class=""ss"">processors: </span><span class=""p"">[</span><span class=""ss"">:cropper</span><span class=""p"">]}</span>
+    <span class=""p"">},</span>
+    <span class=""ss"">default_url: </span><span class=""s2"">""/:class/:attachment/default.png""</span>
+</code></pre>
+</div>
+";2019-05-06 20:57:44.836523;2019-05-06 20:57:44.98013;2019-05-17 21:02:34.166186;;Paperclip run processors for specific style;If you have a Paperclip custom processor that you want to run on specific styles, you can change the `has_attached_file` styles hash so that each style includes a processors array.;rails, paperclip, paperclip processor;paperclip-run-processors-for-specific-style;t;Article
+6;Learning Rails? Follow this newsletter, blog, and forum.;Are you learning Rails? How do you continue learning and start to grasp concepts beyond the basics. You can start by simply subscribing to, reading, and browsing these three sites.;"Have you started to learn Ruby on Rails? Maybe you've hacked your way through one or two tutorials or finished up your first client project. You know you still have a lot to learn, yet you're not really sure where to go from here.  How do you continue learning and start to grasp concepts beyond the basics?
+
+To learn quickly there certainly is no substitute for just sitting down and cranking out as many projects as you can, but one easy way to keep learning and start to become a part of the Rails community is to subscribe to Ruby/Rails specific newsletters and follow a few popular blogs.
+
+The three sources below are my favorites to keep tabs on Ruby/Rails and to continue learning.
+
+## Ruby Weekly
+The [Ruby Weekly](https://rubyweekly.com/) newsletter is an absolute must. Every Thursday an email is sent that covers all of the best Ruby news and articles from the week. I find at least 2 or 3 interesting links each week and have lost count how many times I've been introduced to new (and useful!) tools and concepts through this newsletter. If you don't read anything else Ruby/Rails related, subscribe to and read this newsletter!
+
+## thoughtbot blog
+[thoughtbot](https://thoughtbot.com/blog) is a well established and respected software development company that has a blog that covers topics ranging from web development to design to learning to...well just about anything their wicked smart employees are working on. I generally read their Ruby/Rails specific posts and always learn something new. The company has created some really popular gems, such as [Factory Bot](https://github.com/thoughtbot/factory_bot) and [Paperclip](https://github.com/thoughtbot/paperclip) (which is now deprecated, FYI), so you know you're getting the perspective of the pros, and their posts tend to offer up a lot more than just the basic ""This is how you do X"". That additional opinion/editorial and insight into why they do something a certain way is exactly the type of content you get the most mileage from when you're trying to learn new concepts.
+
+## Reddit Rails
+The [Rails subreddit](https://www.reddit.com/r/rails/) is worth following.  You'll see posts about very specific issues that folks have run into and broader questions about application architecture and design decisions. The general Rails community is supportive and friendly, and I've found that the subreddit usually lives up to those qualities.  You'll get some opinions on articles or posts that you agree with and others that you disagree with but that's kind of the point! Reading the posts, articles, comments, and debates you'll find here exposes you to opinions and perspectives that will help you internalize the topics you're learning.
+
+When you're starting to learn Rails (or anything for that matter) the amount of information and content you need to consume and put into practice can feel overwhelming. Don't get bogged down in reading every blog or article that you come across! Just subscribe to Ruby Weekly, read the thoughtbot blog, and browse the Rails subreddit. These excellent sources will offer plenty of content, opinion, and expertise to get you going.";"<p>Have you started to learn Ruby on Rails? Maybe you’ve hacked your way through one or two tutorials or finished up your first client project. You know you still have a lot to learn, yet you’re not really sure where to go from here.  How do you continue learning and start to grasp concepts beyond the basics?</p>
+
+<p>To learn quickly there certainly is no substitute for just sitting down and cranking out as many projects as you can, but one easy way to keep learning and start to become a part of the Rails community is to subscribe to Ruby/Rails specific newsletters and follow a few popular blogs.</p>
+
+<p>The three sources below are my favorites to keep tabs on Ruby/Rails and to continue learning.</p>
+
+<h2 id=""ruby-weekly"">Ruby Weekly</h2>
+<p>The <a href=""https://rubyweekly.com/"">Ruby Weekly</a> newsletter is an absolute must. Every Thursday an email is sent that covers all of the best Ruby news and articles from the week. I find at least 2 or 3 interesting links each week and have lost count how many times I’ve been introduced to new (and useful!) tools and concepts through this newsletter. If you don’t read anything else Ruby/Rails related, subscribe to and read this newsletter!</p>
+
+<h2 id=""thoughtbot-blog"">thoughtbot blog</h2>
+<p><a href=""https://thoughtbot.com/blog"">thoughtbot</a> is a well established and respected software development company that has a blog that covers topics ranging from web development to design to learning to…well just about anything their wicked smart employees are working on. I generally read their Ruby/Rails specific posts and always learn something new. The company has created some really popular gems, such as <a href=""https://github.com/thoughtbot/factory_bot"">Factory Bot</a> and <a href=""https://github.com/thoughtbot/paperclip"">Paperclip</a> (which is now deprecated, FYI), so you know you’re getting the perspective of the pros, and their posts tend to offer up a lot more than just the basic “This is how you do X”. That additional opinion/editorial and insight into why they do something a certain way is exactly the type of content you get the most mileage from when you’re trying to learn new concepts.</p>
+
+<h2 id=""reddit-rails"">Reddit Rails</h2>
+<p>The <a href=""https://www.reddit.com/r/rails/"">Rails subreddit</a> is worth following.  You’ll see posts about very specific issues that folks have run into and broader questions about application architecture and design decisions. The general Rails community is supportive and friendly, and I’ve found that the subreddit usually lives up to those qualities.  You’ll get some opinions on articles or posts that you agree with and others that you disagree with but that’s kind of the point! Reading the posts, articles, comments, and debates you’ll find here exposes you to opinions and perspectives that will help you internalize the topics you’re learning.</p>
+
+<p>When you’re starting to learn Rails (or anything for that matter) the amount of information and content you need to consume and put into practice can feel overwhelming. Don’t get bogged down in reading every blog or article that you come across! Just subscribe to Ruby Weekly, read the thoughtbot blog, and browse the Rails subreddit. These excellent sources will offer plenty of content, opinion, and expertise to get you going.</p>
+";2019-04-28 17:38:59.682669;2019-04-28 17:36:20.509953;2019-05-17 21:03:04.671642;;Learning Rails? Follow these top blogs, newsletters, and forums;Are you learning Rails? How do you continue learning and start to grasp concepts beyond the basics. You can start by simply subscribing to, reading, and browsing these three sites.;Rails, Rails blogs, Ruby, Ruby blogs, Ruby Weekly;learning-rails-follow-this-newsletter-blog-and-forum;t;Article
+12;How to install new ruby with rbenv;Use rbenv install to install a new ruby, but be careful because it will download a bundler version you're not expecting;"~~~ sh
+$ cd ~/.rbenv/plugins/ruby-build
+$ git pull # get latest rubies available to install
+$ rbenv install 2.4.5
+
+# rbenv installs the latest bundler gem. if you need
+# to specify the version, delete the bundler that was
+# automatically installed and reinstall
+
+$ gem uninstall bundler
+$ gem install bundler -v '1.17.3'
+~~~
+";"<div class=""language-sh highlighter-rouge""><pre class=""highlight""><code><span class=""gp"">$ </span><span class=""nb"">cd</span> ~/.rbenv/plugins/ruby-build
+<span class=""gp"">$ </span>git pull <span class=""c""># get latest rubies available to install</span>
+<span class=""gp"">$ </span>rbenv install 2.4.5
+
+<span class=""c""># rbenv installs the latest bundler gem. if you need</span>
+<span class=""c""># to specify the version, delete the bundler that was</span>
+<span class=""c""># automatically installed and reinstall</span>
+
+<span class=""gp"">$ </span>gem uninstall bundler
+<span class=""gp"">$ </span>gem install bundler -v <span class=""s1"">'1.17.3'</span>
+</code></pre>
+</div>
+";2019-05-15 20:52:52.065244;2019-05-15 20:52:52.069595;2019-05-17 21:01:52.412603;;How to install a new ruby with rbenv;Learn how to install a ruby version with rbenv;rbenv, ruby, ruby-build, rbenv linux;how-to-install-new-ruby-with-rbenv;t;Snippet
+4;How to add and customize Bootstrap 4 in a Rails 5 app;Learn how to add and customize Bootstrap in a Rails 5 app using the bootstrap gem;"There are a few different ways to integrate Bootstrap into your Rails 5 app, but we'll get it working by installing the [official bootstrap gem](https://github.com/twbs/bootstrap-rubygem). The instructions on the gem's github page are great, so the following is really just a reprint of what you'll find there.
+
+Add the gem to your `Gemfile`.
+
+~~~ ruby
+#GEMFILE
+
+gem 'bootstrap', '~> 4.3.1'
+~~~
+
+Run `bundle install` in your command line.
+
+~~~ sh
+$ bundle install
+~~~
+
+## Include the Bootstrap CSS
+Confirm that your application css file uses a `.scss` extension. It may be a `.css` file in which case you'll have to change it with the following:
+
+~~~ sh
+$ mv app/assets/stylesheets/application.css app/assets/stylesheets/application.scss
+~~~
+
+Remove any `*= require` and `*= require_tree` statements from the Sass file, and instead use `@import` to import Sass files. Then import the bootstrap styles!
+
+~~~ sass
+//app/assets/stylesheets/application.scss
+
+@import ""bootstrap"";
+~~~
+
+You've now got all the bootstrap styles ready to go! We're not quite done though. 
+
+## Include the Bootstrap Javascript
+Many of the Bootstrap components rely on Javascript and jQuery, so we need to import the Bootstrap javascript files and install jQuery if we need to. jQuery is already included if your Rails version is less 5.1. In that case, simply include bootstrap and popper (a Javascript library bootstrap depends upon for positioning) in your `app/assets/javascripts/application.js` manifest file.
+
+~~~ javascript
+//app/assets/javascripts/application.js
+
+//= require popper
+//= require bootstrap
+~~~
+
+If your Rails version is 5.1+ then you'll need to include jQuery. To do that, install the `jquery-rails` gem, `bundle intsall` and then add the libraries to your `application.js` manifest file. For example:
+
+~~~ ruby
+#GEMFILE
+
+gem 'jquery-rails'
+~~~
+
+~~~ sh
+$ bundle install
+~~~
+
+~~~ javascript
+//app/assets/javascripts/application.js
+
+//= require jquery3
+//= require popper
+//= require bootstrap
+~~~
+
+Now we're ready to customize the styles!
+
+## Customize Bootstrap
+There are a lot of Bootstrap variables that you can define to give your app its own custom style. We'll just quickly change the body background color and the theme colors to quickly show how to get started. The key point is that you have to set these variables before your `@import ""bootstrap"";` line.
+
+We'll change the theme colors to match the signal theme from this [Bootstrap theming site](http://bootstrap.themes.guide/signal/) and change our body background to a light gray.
+
+~~~ scss
+//app/assets/stylesheets/application.scss
+
+$body-bg: #e2e2e2;
+
+$theme-colors: (
+  ""primary"": #FF304F,
+  ""secondary"": #CACACA,
+  ""success"": #015668,
+  ""info"": #0F81C7,
+  ""warning"": #0DE2EA,
+  ""danger"": #06648C,
+  ""light"": #ececec,
+  ""dark"": #222222
+);
+
+@import ""bootstrap""; //bootstrap gem
+~~~
+
+Now you can use the standard Bootstrap styles but they'll have your custom colors! 
+
+![customize bootstrap](https://everclimb.s3.amazonaws.com/images/original/1-Screen_Shot_2019-04-20_at_3.54.39_PM.png?1555790295){: .img-responsive.img-content}
+
+~~~ haml
+.container
+  .row
+    .col-md
+      %button.btn.btn-primary Primary
+      %button.btn.btn-secondary Secondary 
+      %button.btn.btn-success Success 
+      %button.btn.btn-danger Danger
+      %button.btn.btn-warning Warning
+      %button.btn.btn-info Info
+      %button.btn.btn-light Light
+      %button.btn.btn-dark Dark
+~~~
+
+There are many other neat tricks and utilities that Bootstrap provides to further customize the look and feel of your app. I'd recommend reading through the [documentation](https://getbootstrap.com/docs/4.3/getting-started/introduction/) to learn more, but I hope the above helps get you started.";"<p>There are a few different ways to integrate Bootstrap into your Rails 5 app, but we’ll get it working by installing the <a href=""https://github.com/twbs/bootstrap-rubygem"">official bootstrap gem</a>. The instructions on the gem’s github page are great, so the following is really just a reprint of what you’ll find there.</p>
+
+<p>Add the gem to your <code>Gemfile</code>.</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1"">#GEMFILE</span>
+
+<span class=""n"">gem</span> <span class=""s1"">'bootstrap'</span><span class=""p"">,</span> <span class=""s1"">'~&gt; 4.3.1'</span>
+</code></pre>
+</div>
+
+<p>Run <code>bundle install</code> in your command line.</p>
+
+<div class=""language-sh highlighter-rouge""><pre class=""highlight""><code><span class=""gp"">$ </span>bundle install
+</code></pre>
+</div>
+
+<h2 id=""include-the-bootstrap-css"">Include the Bootstrap CSS</h2>
+<p>Confirm that your application css file uses a <code>.scss</code> extension. It may be a <code>.css</code> file in which case you’ll have to change it with the following:</p>
+
+<div class=""language-sh highlighter-rouge""><pre class=""highlight""><code><span class=""gp"">$ </span>mv app/assets/stylesheets/application.css app/assets/stylesheets/application.scss
+</code></pre>
+</div>
+
+<p>Remove any <code>*= require</code> and <code>*= require_tree</code> statements from the Sass file, and instead use <code>@import</code> to import Sass files. Then import the bootstrap styles!</p>
+
+<div class=""language-sass highlighter-rouge""><pre class=""highlight""><code><span class=""c1"">//app/assets/stylesheets/application.scss
+</span>
+<span class=""k"">@import</span> <span class=""s"">""bootstrap"";</span>
+</code></pre>
+</div>
+
+<p>You’ve now got all the bootstrap styles ready to go! We’re not quite done though.</p>
+
+<h2 id=""include-the-bootstrap-javascript"">Include the Bootstrap Javascript</h2>
+<p>Many of the Bootstrap components rely on Javascript and jQuery, so we need to import the Bootstrap javascript files and install jQuery if we need to. jQuery is already included if your Rails version is less 5.1. In that case, simply include bootstrap and popper (a Javascript library bootstrap depends upon for positioning) in your <code>app/assets/javascripts/application.js</code> manifest file.</p>
+
+<div class=""language-javascript highlighter-rouge""><pre class=""highlight""><code><span class=""c1"">//app/assets/javascripts/application.js</span>
+
+<span class=""c1"">//= require popper</span>
+<span class=""c1"">//= require bootstrap</span>
+</code></pre>
+</div>
+
+<p>If your Rails version is 5.1+ then you’ll need to include jQuery. To do that, install the <code>jquery-rails</code> gem, <code>bundle intsall</code> and then add the libraries to your <code>application.js</code> manifest file. For example:</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1"">#GEMFILE</span>
+
+<span class=""n"">gem</span> <span class=""s1"">'jquery-rails'</span>
+</code></pre>
+</div>
+
+<div class=""language-sh highlighter-rouge""><pre class=""highlight""><code><span class=""gp"">$ </span>bundle install
+</code></pre>
+</div>
+
+<div class=""language-javascript highlighter-rouge""><pre class=""highlight""><code><span class=""c1"">//app/assets/javascripts/application.js</span>
+
+<span class=""c1"">//= require jquery3</span>
+<span class=""c1"">//= require popper</span>
+<span class=""c1"">//= require bootstrap</span>
+</code></pre>
+</div>
+
+<p>Now we’re ready to customize the styles!</p>
+
+<h2 id=""customize-bootstrap"">Customize Bootstrap</h2>
+<p>There are a lot of Bootstrap variables that you can define to give your app its own custom style. We’ll just quickly change the body background color and the theme colors to quickly show how to get started. The key point is that you have to set these variables before your <code>@import ""bootstrap"";</code> line.</p>
+
+<p>We’ll change the theme colors to match the signal theme from this <a href=""http://bootstrap.themes.guide/signal/"">Bootstrap theming site</a> and change our body background to a light gray.</p>
+
+<div class=""language-scss highlighter-rouge""><pre class=""highlight""><code><span class=""c1"">//app/assets/stylesheets/application.scss
+</span>
+<span class=""nv"">$body-bg</span><span class=""p"">:</span> <span class=""mh"">#e2e2e2</span><span class=""p"">;</span>
+
+<span class=""nv"">$theme-colors</span><span class=""p"">:</span> <span class=""p"">(</span>
+  <span class=""s2"">""primary""</span><span class=""o"">:</span> <span class=""mh"">#FF304F</span><span class=""o"">,</span>
+  <span class=""s2"">""secondary""</span><span class=""o"">:</span> <span class=""mh"">#CACACA</span><span class=""o"">,</span>
+  <span class=""s2"">""success""</span><span class=""o"">:</span> <span class=""mh"">#015668</span><span class=""o"">,</span>
+  <span class=""s2"">""info""</span><span class=""o"">:</span> <span class=""mh"">#0F81C7</span><span class=""o"">,</span>
+  <span class=""s2"">""warning""</span><span class=""o"">:</span> <span class=""mh"">#0DE2EA</span><span class=""o"">,</span>
+  <span class=""s2"">""danger""</span><span class=""o"">:</span> <span class=""mh"">#06648C</span><span class=""o"">,</span>
+  <span class=""s2"">""light""</span><span class=""o"">:</span> <span class=""mh"">#ececec</span><span class=""o"">,</span>
+  <span class=""s2"">""dark""</span><span class=""o"">:</span> <span class=""mh"">#222222</span>
+<span class=""p"">);</span>
+
+<span class=""k"">@import</span> <span class=""s2"">""bootstrap""</span><span class=""p"">;</span> <span class=""c1"">//bootstrap gem
+</span></code></pre>
+</div>
+
+<p>Now you can use the standard Bootstrap styles but they’ll have your custom colors!</p>
+
+<p><img src=""https://everclimb.s3.amazonaws.com/images/original/1-Screen_Shot_2019-04-20_at_3.54.39_PM.png?1555790295"" alt=""customize bootstrap"" class=""img-responsive img-content"" /></p>
+
+<div class=""language-haml highlighter-rouge""><pre class=""highlight""><code><span class=""nc"">.container</span>
+  <span class=""nc"">.row</span>
+    <span class=""nc"">.col-md</span>
+      <span class=""nt"">%button</span><span class=""nc"">.btn.btn-primary</span> Primary
+      <span class=""nt"">%button</span><span class=""nc"">.btn.btn-secondary</span> Secondary 
+      <span class=""nt"">%button</span><span class=""nc"">.btn.btn-success</span> Success 
+      <span class=""nt"">%button</span><span class=""nc"">.btn.btn-danger</span> Danger
+      <span class=""nt"">%button</span><span class=""nc"">.btn.btn-warning</span> Warning
+      <span class=""nt"">%button</span><span class=""nc"">.btn.btn-info</span> Info
+      <span class=""nt"">%button</span><span class=""nc"">.btn.btn-light</span> Light
+      <span class=""nt"">%button</span><span class=""nc"">.btn.btn-dark</span> Dark
+</code></pre>
+</div>
+
+<p>There are many other neat tricks and utilities that Bootstrap provides to further customize the look and feel of your app. I’d recommend reading through the <a href=""https://getbootstrap.com/docs/4.3/getting-started/introduction/"">documentation</a> to learn more, but I hope the above helps get you started.</p>
+";2019-04-20 20:02:20.890688;2019-04-20 18:56:59.060098;2019-05-17 21:04:14.910779;;Install and customize Bootstrap in a Rails 5 app;Learn how to add and customize Bootstrap in a Rails 5 app using the bootstrap gem;bootstrap, customize bootstrap, bootstrap rails, rails 5 bootstrap;how-to-add-and-customize-bootstrap-4-in-a-rails-5-app;t;Article
+7;Crop photos with Rails, Paperclip, and Jcrop;Learn how to crop photos using Rails, Paperclip, and Jcrop;"Are you having trouble putting all the pieces together to allow users to crop a photo and save the cropped photo to your model using [paperclip](https://github.com/thoughtbot/paperclip)? You have a user model with a paperclip attachment for the user's profile photo and using the [Jcrop jQuery](http://deepliquid.com/content/Jcrop_Download.html) library seems straightforward enough, but how do you get the cropped dimensions from the front end submitted to your app and then to paperclip so that the cropping actually occurs? It's easier than it seems!
+
+With a feature that has a lot of moving pieces, I like to break it up into more manageable pieces before trying to get it all to work. In this case, we'll try to do something like this:
+
+1. Add Jcrop to our app and add `crop_images` routes
+2. Get Jcrop working on our page
+3. Submit Jcrop coordinates to our server
+4. Use coordinates submitted to crop photo using paperclip
+
+## 1. Basic Setup
+I'm going to assume you have a User model and that you've already successfully setup paperclip. It should look something like this:
+
+~~~ ruby
+# app/models/user.rb
+
+class User < ActiveRecord::Base
+  has_attached_file :photo,
+    styles: {full: '512x512>', thumb: '256x256#'},
+    default_url: ""/:class/:attachment/default.png""
+end
+~~~
+
+Download the Jcrop library and then add the `jquery.Jcrop.js` and `jquery.Jcrop.css` files to your app's vendor directory. The js file will go here `vendor/assets/javascripts/jquery.Jcrop.js` and the css file should go here `vendor/assets/stylesheets/jquery.Jcrop.css`.  Now we need to add those assets to our asset manifest files.
+
+~~~ javascript
+// app/assets/javascripts/application.js
+
+//= require jquery.Jcrop.js
+~~~
+
+~~~ css
+/* app/assets/stylesheets/application.css */
+
+*= require jquery.Jcrop
+~~~
+
+Let's add routes for the pages where a user can crop an image. 
+
+~~~ ruby
+# config/routes.rb
+
+resources :users do
+  resources :crop_images, only: [:new, :create]
+end
+~~~
+
+## 2. Get Jcrop working
+First we need to create our `CropImagesController` and the `crop_images_controller#new` view. We're using Bootstrap so our view will have some familiar layout classes. 
+
+~~~ ruby 
+# app/controllers/crop_images_controller.rb
+
+class CropImagesController < ApplicationController
+  def new
+    @user = User.find(params[:user_id])
+  end
+end
+~~~
+
+~~~ haml
+// app/views/crop_images/new.html.haml
+
+.container
+  .row
+    .col-md-12
+      %h3 Crop Image
+      - if @user.photo.exists?
+        #crop-stage.m-b-lg
+          = image_tag @user.photo.url(:original), id: 'crop-image', style: 'max-width:none;max-height:none;'
+          = form_tag user_crop_images_url(user_id: @user.id) do
+            = hidden_field_tag :coords_x, nil, id: 'coords-x'
+            = hidden_field_tag :coords_y, nil, id: 'coords-y'
+            = hidden_field_tag :coords_h, nil, id: 'coords-h'
+            = hidden_field_tag :coords_w, nil, id: 'coords-w'
+            = submit_tag t('aaa.rest.save'), class: 'btn btn-primary', data: {disable_with: ""...""}
+      - else
+        %p.text-danger
+          This user doesn't have a photo to crop.
+~~~
+
+In our view we check to make sure the user has a photo and display a message if he/she doesn't. If the user does have a photo, then we show the original image using `image_tag` and give the image an ID of `#crop-image`. I've added some inline styles to set the max-width and max-height as none.  This allows our image to initially show up at its original size, and we'll use [Jcrop's Box Sizing](http://deepliquid.com/content/Jcrop_Sizing_Issues.html) method to scale the image to a manageable width/height in the browser. More on that to come!
+
+We've also added a form to the page which will submit to the `crop_images_controller#create` action when the user hits save. The form has hidden fields for the cropping coordinates, initially, and those are the fields we'll set in our javascript.
+
+Add a new file to `app/assets/javascripts` (you'll have to add this file to your `application.js` manifest file if you don't use `//= require_tree .`).
+
+~~~ javascript
+// app/assets/javascripts/image_cropper.js
+
+ImageCropper = function(elementId) {
+  var self = this;
+
+  self.initJcrop = function() {
+    $(elementId).Jcrop({
+      aspectRatio: 1,
+      boxWidth: 600,
+      onChange: self.updateCoords,
+      onSelect: self.updateCoords
+    })
+  }
+
+  self.updateCoords = function(coords) {
+    $('#coords-x').val(coords.x);
+    $('#coords-y').val(coords.y);
+    $('#coords-w').val(coords.w);
+    $('#coords-h').val(coords.h);
+  }
+}
+
+$(document).ready(function() {
+  if ( $('#crop-image').length > 0 ) {
+    cropper = new ImageCropper('#crop-image');
+    cropper.initJcrop();
+  }
+});
+~~~
+
+Our `ImageCropper` class initializes Jcrop with a few options. We're setting the aspectRatio to 1 and boxWidth to 600. The boxWidth option is what scales down the image to a maximum width of 600 (or whatever you set it to). We also set the onChange and onSelect callback options to our updateCoords function.  The updateCoords method takes the coordinates that Jcrop passes in and sets our hidden fields to the appropriate values. At this point, Jcrop should be working! If you navigate to your `/users/:user_id/crop_images/new` page, you should see the user photo and be able to crop it. Now what happens when we hit save?
+
+## Submit Jcrop coordinates to the server
+When you hit save on the `/users/:user_id/crop_images/new`, it will submit a post request to the `crop_images_controller#create` action with the coordinate params. The `create` action needs submit the coordinate information to our user model and to paperclip.
+
+~~~ ruby
+# app/controllers/crop_images_controller
+
+class CropImagesController < ApplicationController
+  def new
+    @user = User.find(params[:user_id])
+  end
+
+  def create
+    @user = User.find(params[:user_id])
+    if @user.photo.exists? &&
+        params[:coords_x].present? && 
+        params[:coords_y].present? && 
+        params[:coords_w].present? && 
+        params[:coords_h].present?
+
+      @user.photo_crop_x = params[:coords_x]
+      @user.photo_crop_y = params[:coords_y]
+      @user.photo_crop_w = params[:coords_w]
+      @user.photo_crop_h = params[:coords_h]
+      @user.photo = File.open(@user.photo.path(:original))
+      @user.save
+      flash[:success] = ""Successfully Saved""
+      redirect_to user_url(@user)
+    else
+      flash[:notice] = ""You must submit cropping dimensions""
+      redirect_to new_user_crop_image_url(user_id: @user.id)
+    end
+  end
+end
+~~~ 
+
+In the above `create` action we first check to make sure that the user has a photo and that all the coordinate params have been submitted. If they haven't we redirect to the `new` page with an error message. If the user does have a photo and the coordinate params are submitted we assign the user's virtual cropping attributes with the given data. The user's ""virtual cropping attributes"" are available to us by using Rails' `attr_accessor` in our user model like so:
+
+~~~ ruby
+# app/models/user.rb
+
+class User < ActiveRecord::Base
+  attr_accessor :photo_crop_x, :photo_crop_y, :photo_crop_w, :photo_crop_h
+end
+~~~
+
+After setting those attributes in our controller with the provided data, we call `save` on the user. During the save process, paperclip will now have access to the cropping coordinates. We'll write a custom processor to perform the cropping.
+
+## Use coordinates submitted to crop photo using paperclip
+The final piece to the puzzle is to write a custom processor for paperclip. Custom processor's go in your `lib/paperclip_processors` directory and allow you to transform the picture/attachment in any way you see fit. In this case, our processor will inherit from Paperclip's Thumbnail processor and will look like this:
+
+~~~ ruby 
+# lib/paperclip_processors/cropper.rb
+
+module Paperclip
+  class Cropper < Thumbnail
+    def cropping?
+      target.photo_crop_w.present? && 
+        target.photo_crop_h.present? &&
+        target.photo_crop_x.present? &&
+        target.photo_crop_y.present? 
+    end
+
+    def target
+      @attachment.instance
+    end
+
+    def transformation_command
+      return super unless cropping?
+      crop_command = [
+        ""-crop"",
+        ""#{target.photo_crop_w.to_f}x"" \
+        ""#{target.photo_crop_h.to_f}+"" \
+        ""#{target.photo_crop_x.to_f}+"" \
+        ""#{target.photo_crop_y.to_f}"",
+        ""+repage""
+      ]
+      crop_command + super
+    end
+  end
+end
+~~~
+
+The `transformation_command` first checks to make sure that we're cropping the photo by checking if our target (in this case our user object) has all the virtual cropping attributes present.  If those aren't present, then we defer to `super`. If the cropping attributes are present we create an [ImageMagick](http://www.imagemagick.org/script/command-line-options.php#crop) `crop` command which will crop the photo to our desired dimensions and then pass the cropped photo onto subsequent paperclip processing. 
+
+## Conclusion
+And that's it! With these pieces in place, you can now crop photos using Rails, paperclip, and Jcrop. You should be able to navigate to the cropping page, select the cropping area on the photo, hit save, and finally have a cropped photo saved to your user model. Building a feature like the above can be a bit overwhelming when you first start, but breaking it up into individual steps before you set out to implement can keep you on the right track before trying to piece it all together.";"<p>Are you having trouble putting all the pieces together to allow users to crop a photo and save the cropped photo to your model using <a href=""https://github.com/thoughtbot/paperclip"">paperclip</a>? You have a user model with a paperclip attachment for the user’s profile photo and using the <a href=""http://deepliquid.com/content/Jcrop_Download.html"">Jcrop jQuery</a> library seems straightforward enough, but how do you get the cropped dimensions from the front end submitted to your app and then to paperclip so that the cropping actually occurs? It’s easier than it seems!</p>
+
+<p>With a feature that has a lot of moving pieces, I like to break it up into more manageable pieces before trying to get it all to work. In this case, we’ll try to do something like this:</p>
+
+<ol>
+  <li>Add Jcrop to our app and add <code>crop_images</code> routes</li>
+  <li>Get Jcrop working on our page</li>
+  <li>Submit Jcrop coordinates to our server</li>
+  <li>Use coordinates submitted to crop photo using paperclip</li>
+</ol>
+
+<h2 id=""basic-setup"">1. Basic Setup</h2>
+<p>I’m going to assume you have a User model and that you’ve already successfully setup paperclip. It should look something like this:</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1""># app/models/user.rb</span>
+
+<span class=""k"">class</span> <span class=""nc"">User</span> <span class=""o"">&lt;</span> <span class=""no"">ActiveRecord</span><span class=""o"">::</span><span class=""no"">Base</span>
+  <span class=""n"">has_attached_file</span> <span class=""ss"">:photo</span><span class=""p"">,</span>
+    <span class=""ss"">styles: </span><span class=""p"">{</span><span class=""ss"">full: </span><span class=""s1"">'512x512&gt;'</span><span class=""p"">,</span> <span class=""ss"">thumb: </span><span class=""s1"">'256x256#'</span><span class=""p"">},</span>
+    <span class=""ss"">default_url: </span><span class=""s2"">""/:class/:attachment/default.png""</span>
+<span class=""k"">end</span>
+</code></pre>
+</div>
+
+<p>Download the Jcrop library and then add the <code>jquery.Jcrop.js</code> and <code>jquery.Jcrop.css</code> files to your app’s vendor directory. The js file will go here <code>vendor/assets/javascripts/jquery.Jcrop.js</code> and the css file should go here <code>vendor/assets/stylesheets/jquery.Jcrop.css</code>.  Now we need to add those assets to our asset manifest files.</p>
+
+<div class=""language-javascript highlighter-rouge""><pre class=""highlight""><code><span class=""c1"">// app/assets/javascripts/application.js</span>
+
+<span class=""c1"">//= require jquery.Jcrop.js</span>
+</code></pre>
+</div>
+
+<div class=""language-css highlighter-rouge""><pre class=""highlight""><code><span class=""c"">/* app/assets/stylesheets/application.css */</span>
+
+<span class=""o"">*=</span> <span class=""nt"">require</span> <span class=""nt"">jquery</span><span class=""nc"">.Jcrop</span>
+</code></pre>
+</div>
+
+<p>Let’s add routes for the pages where a user can crop an image.</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1""># config/routes.rb</span>
+
+<span class=""n"">resources</span> <span class=""ss"">:users</span> <span class=""k"">do</span>
+  <span class=""n"">resources</span> <span class=""ss"">:crop_images</span><span class=""p"">,</span> <span class=""ss"">only: </span><span class=""p"">[</span><span class=""ss"">:new</span><span class=""p"">,</span> <span class=""ss"">:create</span><span class=""p"">]</span>
+<span class=""k"">end</span>
+</code></pre>
+</div>
+
+<h2 id=""get-jcrop-working"">2. Get Jcrop working</h2>
+<p>First we need to create our <code>CropImagesController</code> and the <code>crop_images_controller#new</code> view. We’re using Bootstrap so our view will have some familiar layout classes.</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1""># app/controllers/crop_images_controller.rb</span>
+
+<span class=""k"">class</span> <span class=""nc"">CropImagesController</span> <span class=""o"">&lt;</span> <span class=""no"">ApplicationController</span>
+  <span class=""k"">def</span> <span class=""nf"">new</span>
+    <span class=""vi"">@user</span> <span class=""o"">=</span> <span class=""no"">User</span><span class=""p"">.</span><span class=""nf"">find</span><span class=""p"">(</span><span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:user_id</span><span class=""p"">])</span>
+  <span class=""k"">end</span>
+<span class=""k"">end</span>
+</code></pre>
+</div>
+
+<div class=""language-haml highlighter-rouge""><pre class=""highlight""><code><span class=""c"">// app/views/crop_images/new.html.haml
+</span>
+<span class=""nc"">.container</span>
+  <span class=""nc"">.row</span>
+    <span class=""nc"">.col-md-12</span>
+      <span class=""nt"">%h3</span> Crop Image
+      <span class=""p"">-</span> <span class=""k"">if</span> <span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">photo</span><span class=""p"">.</span><span class=""nf"">exists?</span>
+        <span class=""nf"">#crop-stage</span><span class=""nc"">.m-b-lg</span>
+          <span class=""p"">=</span> <span class=""n"">image_tag</span> <span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">photo</span><span class=""p"">.</span><span class=""nf"">url</span><span class=""p"">(</span><span class=""ss"">:original</span><span class=""p"">),</span> <span class=""ss"">id: </span><span class=""s1"">'crop-image'</span><span class=""p"">,</span> <span class=""ss"">style: </span><span class=""s1"">'max-width:none;max-height:none;'</span>
+          <span class=""p"">=</span> <span class=""n"">form_tag</span> <span class=""n"">user_crop_images_url</span><span class=""p"">(</span><span class=""ss"">user_id: </span><span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">id</span><span class=""p"">)</span> <span class=""k"">do</span>
+            <span class=""p"">=</span> <span class=""n"">hidden_field_tag</span> <span class=""ss"">:coords_x</span><span class=""p"">,</span> <span class=""kp"">nil</span><span class=""p"">,</span> <span class=""ss"">id: </span><span class=""s1"">'coords-x'</span>
+            <span class=""p"">=</span> <span class=""n"">hidden_field_tag</span> <span class=""ss"">:coords_y</span><span class=""p"">,</span> <span class=""kp"">nil</span><span class=""p"">,</span> <span class=""ss"">id: </span><span class=""s1"">'coords-y'</span>
+            <span class=""p"">=</span> <span class=""n"">hidden_field_tag</span> <span class=""ss"">:coords_h</span><span class=""p"">,</span> <span class=""kp"">nil</span><span class=""p"">,</span> <span class=""ss"">id: </span><span class=""s1"">'coords-h'</span>
+            <span class=""p"">=</span> <span class=""n"">hidden_field_tag</span> <span class=""ss"">:coords_w</span><span class=""p"">,</span> <span class=""kp"">nil</span><span class=""p"">,</span> <span class=""ss"">id: </span><span class=""s1"">'coords-w'</span>
+            <span class=""p"">=</span> <span class=""n"">submit_tag</span> <span class=""n"">t</span><span class=""p"">(</span><span class=""s1"">'aaa.rest.save'</span><span class=""p"">),</span> <span class=""ss"">class: </span><span class=""s1"">'btn btn-primary'</span><span class=""p"">,</span> <span class=""ss"">data: </span><span class=""p"">{</span><span class=""ss"">disable_with: </span><span class=""s2"">""...""</span><span class=""p"">}</span>
+      <span class=""p"">-</span> <span class=""k"">else</span>
+        <span class=""nt"">%p</span><span class=""nc"">.text-danger</span>
+          This user doesn't have a photo to crop.
+</code></pre>
+</div>
+
+<p>In our view we check to make sure the user has a photo and display a message if he/she doesn’t. If the user does have a photo, then we show the original image using <code>image_tag</code> and give the image an ID of <code>#crop-image</code>. I’ve added some inline styles to set the max-width and max-height as none.  This allows our image to initially show up at its original size, and we’ll use <a href=""http://deepliquid.com/content/Jcrop_Sizing_Issues.html"">Jcrop’s Box Sizing</a> method to scale the image to a manageable width/height in the browser. More on that to come!</p>
+
+<p>We’ve also added a form to the page which will submit to the <code>crop_images_controller#create</code> action when the user hits save. The form has hidden fields for the cropping coordinates, initially, and those are the fields we’ll set in our javascript.</p>
+
+<p>Add a new file to <code>app/assets/javascripts</code> (you’ll have to add this file to your <code>application.js</code> manifest file if you don’t use <code>//= require_tree .</code>).</p>
+
+<div class=""language-javascript highlighter-rouge""><pre class=""highlight""><code><span class=""c1"">// app/assets/javascripts/image_cropper.js</span>
+
+<span class=""nx"">ImageCropper</span> <span class=""o"">=</span> <span class=""kd"">function</span><span class=""p"">(</span><span class=""nx"">elementId</span><span class=""p"">)</span> <span class=""p"">{</span>
+  <span class=""kd"">var</span> <span class=""nx"">self</span> <span class=""o"">=</span> <span class=""k"">this</span><span class=""p"">;</span>
+
+  <span class=""nx"">self</span><span class=""p"">.</span><span class=""nx"">initJcrop</span> <span class=""o"">=</span> <span class=""kd"">function</span><span class=""p"">()</span> <span class=""p"">{</span>
+    <span class=""nx"">$</span><span class=""p"">(</span><span class=""nx"">elementId</span><span class=""p"">).</span><span class=""nx"">Jcrop</span><span class=""p"">({</span>
+      <span class=""na"">aspectRatio</span><span class=""p"">:</span> <span class=""mi"">1</span><span class=""p"">,</span>
+      <span class=""na"">boxWidth</span><span class=""p"">:</span> <span class=""mi"">600</span><span class=""p"">,</span>
+      <span class=""na"">onChange</span><span class=""p"">:</span> <span class=""nx"">self</span><span class=""p"">.</span><span class=""nx"">updateCoords</span><span class=""p"">,</span>
+      <span class=""na"">onSelect</span><span class=""p"">:</span> <span class=""nx"">self</span><span class=""p"">.</span><span class=""nx"">updateCoords</span>
+    <span class=""p"">})</span>
+  <span class=""p"">}</span>
+
+  <span class=""nx"">self</span><span class=""p"">.</span><span class=""nx"">updateCoords</span> <span class=""o"">=</span> <span class=""kd"">function</span><span class=""p"">(</span><span class=""nx"">coords</span><span class=""p"">)</span> <span class=""p"">{</span>
+    <span class=""nx"">$</span><span class=""p"">(</span><span class=""s1"">'#coords-x'</span><span class=""p"">).</span><span class=""nx"">val</span><span class=""p"">(</span><span class=""nx"">coords</span><span class=""p"">.</span><span class=""nx"">x</span><span class=""p"">);</span>
+    <span class=""nx"">$</span><span class=""p"">(</span><span class=""s1"">'#coords-y'</span><span class=""p"">).</span><span class=""nx"">val</span><span class=""p"">(</span><span class=""nx"">coords</span><span class=""p"">.</span><span class=""nx"">y</span><span class=""p"">);</span>
+    <span class=""nx"">$</span><span class=""p"">(</span><span class=""s1"">'#coords-w'</span><span class=""p"">).</span><span class=""nx"">val</span><span class=""p"">(</span><span class=""nx"">coords</span><span class=""p"">.</span><span class=""nx"">w</span><span class=""p"">);</span>
+    <span class=""nx"">$</span><span class=""p"">(</span><span class=""s1"">'#coords-h'</span><span class=""p"">).</span><span class=""nx"">val</span><span class=""p"">(</span><span class=""nx"">coords</span><span class=""p"">.</span><span class=""nx"">h</span><span class=""p"">);</span>
+  <span class=""p"">}</span>
+<span class=""p"">}</span>
+
+<span class=""nx"">$</span><span class=""p"">(</span><span class=""nb"">document</span><span class=""p"">).</span><span class=""nx"">ready</span><span class=""p"">(</span><span class=""kd"">function</span><span class=""p"">()</span> <span class=""p"">{</span>
+  <span class=""k"">if</span> <span class=""p"">(</span> <span class=""nx"">$</span><span class=""p"">(</span><span class=""s1"">'#crop-image'</span><span class=""p"">).</span><span class=""nx"">length</span> <span class=""o"">&gt;</span> <span class=""mi"">0</span> <span class=""p"">)</span> <span class=""p"">{</span>
+    <span class=""nx"">cropper</span> <span class=""o"">=</span> <span class=""k"">new</span> <span class=""nx"">ImageCropper</span><span class=""p"">(</span><span class=""s1"">'#crop-image'</span><span class=""p"">);</span>
+    <span class=""nx"">cropper</span><span class=""p"">.</span><span class=""nx"">initJcrop</span><span class=""p"">();</span>
+  <span class=""p"">}</span>
+<span class=""p"">});</span>
+</code></pre>
+</div>
+
+<p>Our <code>ImageCropper</code> class initializes Jcrop with a few options. We’re setting the aspectRatio to 1 and boxWidth to 600. The boxWidth option is what scales down the image to a maximum width of 600 (or whatever you set it to). We also set the onChange and onSelect callback options to our updateCoords function.  The updateCoords method takes the coordinates that Jcrop passes in and sets our hidden fields to the appropriate values. At this point, Jcrop should be working! If you navigate to your <code>/users/:user_id/crop_images/new</code> page, you should see the user photo and be able to crop it. Now what happens when we hit save?</p>
+
+<h2 id=""submit-jcrop-coordinates-to-the-server"">Submit Jcrop coordinates to the server</h2>
+<p>When you hit save on the <code>/users/:user_id/crop_images/new</code>, it will submit a post request to the <code>crop_images_controller#create</code> action with the coordinate params. The <code>create</code> action needs submit the coordinate information to our user model and to paperclip.</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1""># app/controllers/crop_images_controller</span>
+
+<span class=""k"">class</span> <span class=""nc"">CropImagesController</span> <span class=""o"">&lt;</span> <span class=""no"">ApplicationController</span>
+  <span class=""k"">def</span> <span class=""nf"">new</span>
+    <span class=""vi"">@user</span> <span class=""o"">=</span> <span class=""no"">User</span><span class=""p"">.</span><span class=""nf"">find</span><span class=""p"">(</span><span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:user_id</span><span class=""p"">])</span>
+  <span class=""k"">end</span>
+
+  <span class=""k"">def</span> <span class=""nf"">create</span>
+    <span class=""vi"">@user</span> <span class=""o"">=</span> <span class=""no"">User</span><span class=""p"">.</span><span class=""nf"">find</span><span class=""p"">(</span><span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:user_id</span><span class=""p"">])</span>
+    <span class=""k"">if</span> <span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">photo</span><span class=""p"">.</span><span class=""nf"">exists?</span> <span class=""o"">&amp;&amp;</span>
+        <span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:coords_x</span><span class=""p"">].</span><span class=""nf"">present?</span> <span class=""o"">&amp;&amp;</span> 
+        <span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:coords_y</span><span class=""p"">].</span><span class=""nf"">present?</span> <span class=""o"">&amp;&amp;</span> 
+        <span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:coords_w</span><span class=""p"">].</span><span class=""nf"">present?</span> <span class=""o"">&amp;&amp;</span> 
+        <span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:coords_h</span><span class=""p"">].</span><span class=""nf"">present?</span>
+
+      <span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">photo_crop_x</span> <span class=""o"">=</span> <span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:coords_x</span><span class=""p"">]</span>
+      <span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">photo_crop_y</span> <span class=""o"">=</span> <span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:coords_y</span><span class=""p"">]</span>
+      <span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">photo_crop_w</span> <span class=""o"">=</span> <span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:coords_w</span><span class=""p"">]</span>
+      <span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">photo_crop_h</span> <span class=""o"">=</span> <span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:coords_h</span><span class=""p"">]</span>
+      <span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">photo</span> <span class=""o"">=</span> <span class=""no"">File</span><span class=""p"">.</span><span class=""nf"">open</span><span class=""p"">(</span><span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">photo</span><span class=""p"">.</span><span class=""nf"">path</span><span class=""p"">(</span><span class=""ss"">:original</span><span class=""p"">))</span>
+      <span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">save</span>
+      <span class=""n"">flash</span><span class=""p"">[</span><span class=""ss"">:success</span><span class=""p"">]</span> <span class=""o"">=</span> <span class=""s2"">""Successfully Saved""</span>
+      <span class=""n"">redirect_to</span> <span class=""n"">user_url</span><span class=""p"">(</span><span class=""vi"">@user</span><span class=""p"">)</span>
+    <span class=""k"">else</span>
+      <span class=""n"">flash</span><span class=""p"">[</span><span class=""ss"">:notice</span><span class=""p"">]</span> <span class=""o"">=</span> <span class=""s2"">""You must submit cropping dimensions""</span>
+      <span class=""n"">redirect_to</span> <span class=""n"">new_user_crop_image_url</span><span class=""p"">(</span><span class=""ss"">user_id: </span><span class=""vi"">@user</span><span class=""p"">.</span><span class=""nf"">id</span><span class=""p"">)</span>
+    <span class=""k"">end</span>
+  <span class=""k"">end</span>
+<span class=""k"">end</span>
+</code></pre>
+</div>
+
+<p>In the above <code>create</code> action we first check to make sure that the user has a photo and that all the coordinate params have been submitted. If they haven’t we redirect to the <code>new</code> page with an error message. If the user does have a photo and the coordinate params are submitted we assign the user’s virtual cropping attributes with the given data. The user’s “virtual cropping attributes” are available to us by using Rails’ <code>attr_accessor</code> in our user model like so:</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1""># app/models/user.rb</span>
+
+<span class=""k"">class</span> <span class=""nc"">User</span> <span class=""o"">&lt;</span> <span class=""no"">ActiveRecord</span><span class=""o"">::</span><span class=""no"">Base</span>
+  <span class=""kp"">attr_accessor</span> <span class=""ss"">:photo_crop_x</span><span class=""p"">,</span> <span class=""ss"">:photo_crop_y</span><span class=""p"">,</span> <span class=""ss"">:photo_crop_w</span><span class=""p"">,</span> <span class=""ss"">:photo_crop_h</span>
+<span class=""k"">end</span>
+</code></pre>
+</div>
+
+<p>After setting those attributes in our controller with the provided data, we call <code>save</code> on the user. During the save process, paperclip will now have access to the cropping coordinates. We’ll write a custom processor to perform the cropping.</p>
+
+<h2 id=""use-coordinates-submitted-to-crop-photo-using-paperclip"">Use coordinates submitted to crop photo using paperclip</h2>
+<p>The final piece to the puzzle is to write a custom processor for paperclip. Custom processor’s go in your <code>lib/paperclip_processors</code> directory and allow you to transform the picture/attachment in any way you see fit. In this case, our processor will inherit from Paperclip’s Thumbnail processor and will look like this:</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1""># lib/paperclip_processors/cropper.rb</span>
+
+<span class=""k"">module</span> <span class=""nn"">Paperclip</span>
+  <span class=""k"">class</span> <span class=""nc"">Cropper</span> <span class=""o"">&lt;</span> <span class=""no"">Thumbnail</span>
+    <span class=""k"">def</span> <span class=""nf"">cropping?</span>
+      <span class=""n"">target</span><span class=""p"">.</span><span class=""nf"">photo_crop_w</span><span class=""p"">.</span><span class=""nf"">present?</span> <span class=""o"">&amp;&amp;</span> 
+        <span class=""n"">target</span><span class=""p"">.</span><span class=""nf"">photo_crop_h</span><span class=""p"">.</span><span class=""nf"">present?</span> <span class=""o"">&amp;&amp;</span>
+        <span class=""n"">target</span><span class=""p"">.</span><span class=""nf"">photo_crop_x</span><span class=""p"">.</span><span class=""nf"">present?</span> <span class=""o"">&amp;&amp;</span>
+        <span class=""n"">target</span><span class=""p"">.</span><span class=""nf"">photo_crop_y</span><span class=""p"">.</span><span class=""nf"">present?</span> 
+    <span class=""k"">end</span>
+
+    <span class=""k"">def</span> <span class=""nf"">target</span>
+      <span class=""vi"">@attachment</span><span class=""p"">.</span><span class=""nf"">instance</span>
+    <span class=""k"">end</span>
+
+    <span class=""k"">def</span> <span class=""nf"">transformation_command</span>
+      <span class=""k"">return</span> <span class=""k"">super</span> <span class=""k"">unless</span> <span class=""n"">cropping?</span>
+      <span class=""n"">crop_command</span> <span class=""o"">=</span> <span class=""p"">[</span>
+        <span class=""s2"">""-crop""</span><span class=""p"">,</span>
+        <span class=""s2"">""</span><span class=""si"">#{</span><span class=""n"">target</span><span class=""p"">.</span><span class=""nf"">photo_crop_w</span><span class=""p"">.</span><span class=""nf"">to_f</span><span class=""si"">}</span><span class=""s2"">x""</span> <span class=""p"">\</span>
+        <span class=""s2"">""</span><span class=""si"">#{</span><span class=""n"">target</span><span class=""p"">.</span><span class=""nf"">photo_crop_h</span><span class=""p"">.</span><span class=""nf"">to_f</span><span class=""si"">}</span><span class=""s2"">+""</span> <span class=""p"">\</span>
+        <span class=""s2"">""</span><span class=""si"">#{</span><span class=""n"">target</span><span class=""p"">.</span><span class=""nf"">photo_crop_x</span><span class=""p"">.</span><span class=""nf"">to_f</span><span class=""si"">}</span><span class=""s2"">+""</span> <span class=""p"">\</span>
+        <span class=""s2"">""</span><span class=""si"">#{</span><span class=""n"">target</span><span class=""p"">.</span><span class=""nf"">photo_crop_y</span><span class=""p"">.</span><span class=""nf"">to_f</span><span class=""si"">}</span><span class=""s2"">""</span><span class=""p"">,</span>
+        <span class=""s2"">""+repage""</span>
+      <span class=""p"">]</span>
+      <span class=""n"">crop_command</span> <span class=""o"">+</span> <span class=""k"">super</span>
+    <span class=""k"">end</span>
+  <span class=""k"">end</span>
+<span class=""k"">end</span>
+</code></pre>
+</div>
+
+<p>The <code>transformation_command</code> first checks to make sure that we’re cropping the photo by checking if our target (in this case our user object) has all the virtual cropping attributes present.  If those aren’t present, then we defer to <code>super</code>. If the cropping attributes are present we create an <a href=""http://www.imagemagick.org/script/command-line-options.php#crop"">ImageMagick</a> <code>crop</code> command which will crop the photo to our desired dimensions and then pass the cropped photo onto subsequent paperclip processing.</p>
+
+<h2 id=""conclusion"">Conclusion</h2>
+<p>And that’s it! With these pieces in place, you can now crop photos using Rails, paperclip, and Jcrop. You should be able to navigate to the cropping page, select the cropping area on the photo, hit save, and finally have a cropped photo saved to your user model. Building a feature like the above can be a bit overwhelming when you first start, but breaking it up into individual steps before you set out to implement can keep you on the right track before trying to piece it all together.</p>
+";2019-05-03 20:32:58.498967;2019-05-03 20:32:58.609419;2019-05-17 21:02:43.416425;;Crop photos with Rails, Paperclip, and Jcrop;Learn how to crop photos in Rails using Paperclip and Jcrop.;Rails, Jcrop, Paperclip, cropping, ruby on rails;crop-photos-with-rails-paperclip-and-jcrop;t;Article
+3;Use Sass Rack plugin to compile Sass files in Sinatra app;Using the Sass::Plugin::Rack in a Sinatra app is easy enough, but I got tripped up by launching my application using the standard Sinatra `ruby app.rb`. You'll need to run the config.ru file to get the Sass files to compile.;"I followed this [Stack Overflow answer][stackoverflow] to use `Sass::Plugin::Rack` in my Sinatra app. I set up everything as described, creating a `config.ru` file with:
+
+~~~ ruby
+require 'sinatra'
+require 'sass/plugin/rack'
+require './app'
+
+Sass::Plugin.options[:style] = :compressed
+use Sass::Plugin::Rack
+
+run Sinatra::Application
+~~~
+
+and creating a `public/stylesheets/sass/style.scss` file. Unfortunately, the scss file wasn't compiling when I ran `ruby app.rb` as I normally did to launch my app. This makes complete sense now, but it didn't dawn on me until troubleshooting for a while that running `ruby app.rb` wasn't using the `config.ru` file at all. Duh.
+
+If you're using the Sass Rack plugin and have added a config.ru, launch your application by running the config.ru file, and sure enough, your Sass files will correctly compile to a css file. Type the below into your terminal and you're on your way.
+
+~~~ sh
+rackup config.ru
+~~~
+
+[stackoverflow]: http://stackoverflow.com/a/18367901";"<p>I followed this <a href=""http://stackoverflow.com/a/18367901"">Stack Overflow answer</a> to use <code>Sass::Plugin::Rack</code> in my Sinatra app. I set up everything as described, creating a <code>config.ru</code> file with:</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""nb"">require</span> <span class=""s1"">'sinatra'</span>
+<span class=""nb"">require</span> <span class=""s1"">'sass/plugin/rack'</span>
+<span class=""nb"">require</span> <span class=""s1"">'./app'</span>
+
+<span class=""no"">Sass</span><span class=""o"">::</span><span class=""no"">Plugin</span><span class=""p"">.</span><span class=""nf"">options</span><span class=""p"">[</span><span class=""ss"">:style</span><span class=""p"">]</span> <span class=""o"">=</span> <span class=""ss"">:compressed</span>
+<span class=""n"">use</span> <span class=""no"">Sass</span><span class=""o"">::</span><span class=""no"">Plugin</span><span class=""o"">::</span><span class=""no"">Rack</span>
+
+<span class=""n"">run</span> <span class=""no"">Sinatra</span><span class=""o"">::</span><span class=""no"">Application</span>
+</code></pre>
+</div>
+
+<p>and creating a <code>public/stylesheets/sass/style.scss</code> file. Unfortunately, the scss file wasn’t compiling when I ran <code>ruby app.rb</code> as I normally did to launch my app. This makes complete sense now, but it didn’t dawn on me until troubleshooting for a while that running <code>ruby app.rb</code> wasn’t using the <code>config.ru</code> file at all. Duh.</p>
+
+<p>If you’re using the Sass Rack plugin and have added a config.ru, launch your application by running the config.ru file, and sure enough, your Sass files will correctly compile to a css file. Type the below into your terminal and you’re on your way.</p>
+
+<div class=""language-sh highlighter-rouge""><pre class=""highlight""><code>rackup config.ru
+</code></pre>
+</div>
+
+";2019-04-20 18:15:37.926762;2019-04-20 18:15:37.94034;2019-05-17 21:04:31.703824;;Compile Sass files in Sinatra app;Using the Sass::Plugin::Rack in a Sinatra app is easy enough, but I got tripped up by launching my application using the standard Sinatra `ruby app.rb`. You'll need to run the config.ru file to get the Sass files to compile.;Sass, Sass::Plugin::Rack, Sinatra;use-sass-rack-plugin-to-compile-sass-files-in-sinatra-app;f;Article
+13;How to vertically align inline-block elements;How to vertically align inline-block elements;"~~~ html
+<div id=""block"">
+  <div class=""inner inner1"">inline block vertically centered</div>
+  <div class=""inner inner1"">inline block vertically centered</div>
+</div>
+~~~
+
+~~~ css
+#block { 
+  line-height: 60px; 
+}
+.inner {
+  display: inline-block;
+  vertical-align: middle;
+  background: blue;
+  padding: 3px 5px;
+}
+.inner1 {
+  line-height: normal;
+}
+~~~
+
+Reference:
+
+* [https://codepen.io/edge0703/pen/iHJuA](https://codepen.io/edge0703/pen/iHJuA)
+";"<div class=""language-html highlighter-rouge""><pre class=""highlight""><code><span class=""nt"">&lt;div</span> <span class=""na"">id=</span><span class=""s"">""block""</span><span class=""nt"">&gt;</span>
+  <span class=""nt"">&lt;div</span> <span class=""na"">class=</span><span class=""s"">""inner inner1""</span><span class=""nt"">&gt;</span>inline block vertically centered<span class=""nt"">&lt;/div&gt;</span>
+  <span class=""nt"">&lt;div</span> <span class=""na"">class=</span><span class=""s"">""inner inner1""</span><span class=""nt"">&gt;</span>inline block vertically centered<span class=""nt"">&lt;/div&gt;</span>
+<span class=""nt"">&lt;/div&gt;</span>
+</code></pre>
+</div>
+
+<div class=""language-css highlighter-rouge""><pre class=""highlight""><code><span class=""nf"">#block</span> <span class=""p"">{</span> 
+  <span class=""nl"">line-height</span><span class=""p"">:</span> <span class=""m"">60px</span><span class=""p"">;</span> 
+<span class=""p"">}</span>
+<span class=""nc"">.inner</span> <span class=""p"">{</span>
+  <span class=""nl"">display</span><span class=""p"">:</span> <span class=""n"">inline-block</span><span class=""p"">;</span>
+  <span class=""nl"">vertical-align</span><span class=""p"">:</span> <span class=""nb"">middle</span><span class=""p"">;</span>
+  <span class=""nl"">background</span><span class=""p"">:</span> <span class=""no"">blue</span><span class=""p"">;</span>
+  <span class=""nl"">padding</span><span class=""p"">:</span> <span class=""m"">3px</span> <span class=""m"">5px</span><span class=""p"">;</span>
+<span class=""p"">}</span>
+<span class=""nc"">.inner1</span> <span class=""p"">{</span>
+  <span class=""nl"">line-height</span><span class=""p"">:</span> <span class=""nb"">normal</span><span class=""p"">;</span>
+<span class=""p"">}</span>
+</code></pre>
+</div>
+
+<p>Reference:</p>
+
+<ul>
+  <li><a href=""https://codepen.io/edge0703/pen/iHJuA"">https://codepen.io/edge0703/pen/iHJuA</a></li>
+</ul>
+";2019-05-15 21:03:41.053756;2019-05-15 21:03:41.059293;2019-05-17 21:02:03.706314;;How to vertically align inline-block elements;Learn how to vertically align inline-block elements;css, vertically align, vertical-align, inline-block;how-to-vertically-align-inline-block-elements;t;Snippet
+10;How to run whenever cron jobs for a specific environment;Learn how to run a whenever cron job on your production server but not on your staging server.;"When you only want to run whenever gem cron tasks for a specific environment.
+
+Add a `production_cron` and a `staging_cron` to your `config/deploy` files and set the `whenever_roles` variable in `config/deploy.rb'
+
+~~~ ruby
+#config/deploy/production.rb
+server 'deploy@123.123.1.1', user: 'deploy', roles: %w{web app db production_cron}
+
+#config/deploy/staging.rb
+server 'deploy@321.321.1.1', user: 'deploy', roles: %w{web app db staging_cron}
+
+#config/deploy.rb
+set :whenever_roles, -> { ""#{fetch(:stage)}_cron"" }
+set :whenever_environment, -> { fetch(:stage) }
+set :whenever_identifier, -> { ""#{fetch(:application)}_#{fetch(:stage)}"" }
+~~~
+
+Now add `roles: []` to your task definitions.
+
+~~~ ruby
+  every 1.minutes, roles: [:production_cron] do
+    rake 'notifications:process'
+  end
+  every 1.day, at: ['2:00 am'], roles: [:production_cron, :staging_cron] do
+    rake 'db:backups:capture'
+  end
+~~~
+
+Reference:
+
+*  [https://github.com/javan/whenever/issues/563](https://github.com/javan/whenever/issues/563)
+*  [https://www.rubydoc.info/github/javan/whenever#Capistrano_integration](https://www.rubydoc.info/github/javan/whenever#Capistrano_integration)";"<p>When you only want to run whenever gem cron tasks for a specific environment.</p>
+
+<p>Add a <code>production_cron</code> and a <code>staging_cron</code> to your <code>config/deploy</code> files and set the <code>whenever_roles</code> variable in `config/deploy.rb’</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1"">#config/deploy/production.rb</span>
+<span class=""n"">server</span> <span class=""s1"">'deploy@123.123.1.1'</span><span class=""p"">,</span> <span class=""ss"">user: </span><span class=""s1"">'deploy'</span><span class=""p"">,</span> <span class=""ss"">roles: </span><span class=""sx"">%w{web app db production_cron}</span>
+
+<span class=""c1"">#config/deploy/staging.rb</span>
+<span class=""n"">server</span> <span class=""s1"">'deploy@321.321.1.1'</span><span class=""p"">,</span> <span class=""ss"">user: </span><span class=""s1"">'deploy'</span><span class=""p"">,</span> <span class=""ss"">roles: </span><span class=""sx"">%w{web app db staging_cron}</span>
+
+<span class=""c1"">#config/deploy.rb</span>
+<span class=""n"">set</span> <span class=""ss"">:whenever_roles</span><span class=""p"">,</span> <span class=""o"">-&gt;</span> <span class=""p"">{</span> <span class=""s2"">""</span><span class=""si"">#{</span><span class=""n"">fetch</span><span class=""p"">(</span><span class=""ss"">:stage</span><span class=""p"">)</span><span class=""si"">}</span><span class=""s2"">_cron""</span> <span class=""p"">}</span>
+<span class=""n"">set</span> <span class=""ss"">:whenever_environment</span><span class=""p"">,</span> <span class=""o"">-&gt;</span> <span class=""p"">{</span> <span class=""n"">fetch</span><span class=""p"">(</span><span class=""ss"">:stage</span><span class=""p"">)</span> <span class=""p"">}</span>
+<span class=""n"">set</span> <span class=""ss"">:whenever_identifier</span><span class=""p"">,</span> <span class=""o"">-&gt;</span> <span class=""p"">{</span> <span class=""s2"">""</span><span class=""si"">#{</span><span class=""n"">fetch</span><span class=""p"">(</span><span class=""ss"">:application</span><span class=""p"">)</span><span class=""si"">}</span><span class=""s2"">_</span><span class=""si"">#{</span><span class=""n"">fetch</span><span class=""p"">(</span><span class=""ss"">:stage</span><span class=""p"">)</span><span class=""si"">}</span><span class=""s2"">""</span> <span class=""p"">}</span>
+</code></pre>
+</div>
+
+<p>Now add <code>roles: []</code> to your task definitions.</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code>  <span class=""n"">every</span> <span class=""mi"">1</span><span class=""p"">.</span><span class=""nf"">minutes</span><span class=""p"">,</span> <span class=""ss"">roles: </span><span class=""p"">[</span><span class=""ss"">:production_cron</span><span class=""p"">]</span> <span class=""k"">do</span>
+    <span class=""n"">rake</span> <span class=""s1"">'notifications:process'</span>
+  <span class=""k"">end</span>
+  <span class=""n"">every</span> <span class=""mi"">1</span><span class=""p"">.</span><span class=""nf"">day</span><span class=""p"">,</span> <span class=""ss"">at: </span><span class=""p"">[</span><span class=""s1"">'2:00 am'</span><span class=""p"">],</span> <span class=""ss"">roles: </span><span class=""p"">[</span><span class=""ss"">:production_cron</span><span class=""p"">,</span> <span class=""ss"">:staging_cron</span><span class=""p"">]</span> <span class=""k"">do</span>
+    <span class=""n"">rake</span> <span class=""s1"">'db:backups:capture'</span>
+  <span class=""k"">end</span>
+</code></pre>
+</div>
+
+<p>Reference:</p>
+
+<ul>
+  <li><a href=""https://github.com/javan/whenever/issues/563"">https://github.com/javan/whenever/issues/563</a></li>
+  <li><a href=""https://www.rubydoc.info/github/javan/whenever#Capistrano_integration"">https://www.rubydoc.info/github/javan/whenever#Capistrano_integration</a></li>
+</ul>
+";2019-05-15 20:35:35.438113;2019-05-15 20:35:36.041358;2019-05-17 21:01:02.67263;;How to run whenever cron jobs for a specific environment;Learn how to update rbenv's ruby-build plugin to get the latest rubies available to download;capistrano, whenever gem, cron, rails, ruby;how-to-run-whenever-cron-jobs-for-a-specific-environment;t;Snippet
+11;How to update rbenv's list of Ruby versions on Linux;Update the ruby-build plugin to see the most recent list of ruby versions available to install;"You've run `rbenv install --list` and the specific ruby version you want is not available? You'll need to update your `ruby-build` plugin.
+
+~~~ sh
+$ cd ~/.rbenv/plugins/ruby-build
+$ git pull
+~~~
+
+Now `rbenv install --list` should include the version you're looking for!
+
+";"<p>You’ve run <code>rbenv install --list</code> and the specific ruby version you want is not available? You’ll need to update your <code>ruby-build</code> plugin.</p>
+
+<div class=""language-sh highlighter-rouge""><pre class=""highlight""><code><span class=""gp"">$ </span><span class=""nb"">cd</span> ~/.rbenv/plugins/ruby-build
+<span class=""gp"">$ </span>git pull
+</code></pre>
+</div>
+
+<p>Now <code>rbenv install --list</code> should include the version you’re looking for!</p>
+
+";2019-05-15 20:49:41.968228;2019-05-15 20:49:42.106242;2019-05-17 21:01:34.509399;;How to update rbenv's list of Ruby versions on Linux;Learn how to update rbenv's ruby-build plugin to get the latest rubies available to download;rbenv, ruby, ruby-build, rbenv linux;how-to-update-rbenv-s-list-of-ruby-versions-on-linux;t;Snippet
+1;How to set up a subdomain on Rails localhost;Edit your hosts file to set up subdomains that you can use while running a local Rails app.;"I recently worked on a client project that required setting up a subdomain for each of the client's customers. For example, they wanted to use `company1.everclimb.co` for Company 1 and `company2.everclimb.co` for Company 2. Though the app was essentially the same for both
+Company 1 and Company 2 there were a few things that changed based upon the subdomain, such as displaying the appropriate company's logo in the nav bar. I managed to test this locally by editing my hosts file.
+
+You can find your hosts file here: `/private/etc/hosts` Because the file is locked, I had to find the File using Finder, move it to the desktop, edit it, save it, and then move it back to `/private/etc/`
+
+~~~
+Finder --> Go --> Go to folder --> /private/etc/hosts
+~~~
+
+Move the file to your Desktop and open it using your text editor. You can add something like:
+
+~~~
+127.0.0.1       abcwidgets.local.host
+~~~
+
+Save the file and move it back into `/private/etc`. Navigate to your rails app and run the server `rails s`.
+Assuming you're running on the default port (3000), you should now be able to access the subdomain at
+
+~~~
+abcwidgets.local.host:3000
+~~~
+
+Good luck!";"<p>I recently worked on a client project that required setting up a subdomain for each of the client’s customers. For example, they wanted to use <code>company1.everclimb.co</code> for Company 1 and <code>company2.everclimb.co</code> for Company 2. Though the app was essentially the same for both
+Company 1 and Company 2 there were a few things that changed based upon the subdomain, such as displaying the appropriate company’s logo in the nav bar. I managed to test this locally by editing my hosts file.</p>
+
+<p>You can find your hosts file here: <code>/private/etc/hosts</code> Because the file is locked, I had to find the File using Finder, move it to the desktop, edit it, save it, and then move it back to <code>/private/etc/</code></p>
+
+<pre><code>Finder --&gt; Go --&gt; Go to folder --&gt; /private/etc/hosts
+</code></pre>
+
+<p>Move the file to your Desktop and open it using your text editor. You can add something like:</p>
+
+<pre><code>127.0.0.1       abcwidgets.local.host
+</code></pre>
+
+<p>Save the file and move it back into <code>/private/etc</code>. Navigate to your rails app and run the server <code>rails s</code>.
+Assuming you’re running on the default port (3000), you should now be able to access the subdomain at</p>
+
+<pre><code>abcwidgets.local.host:3000
+</code></pre>
+
+<p>Good luck!</p>
+";2019-04-20 18:11:23.828638;2019-04-20 18:11:23.984871;2019-05-17 21:05:02.73549;;How to set up a subdomain on Rails localhost;Edit your hosts file to set up subdomains that you can use while running a local Rails app.;Rails subdomain, local subdomain;how-to-set-up-a-subdomain-on-rails-localhost;t;Article
+14;How to install ImageMagick 7 on Ubuntu 16.04;Learn how to install ImageMagick 7 on Ubuntu;"I recently had a need to convert heic image files to jpg using [ImageMagick](https://imagemagick.org/).  On my computer I didn't have to do anything different than what I'd normally do to convert an image from one format to another. This was working perfectly:
+
+~~~ sh
+$ convert image.heic image.jpg
+~~~
+
+Unfortunately, when I tried to do the same thing on my production server I ran into an error.
+
+~~~ sh
+$ convert image.heic image.jpg
+convert: no decode delegate for this image format `HEIC' @ error/constitute.c/ReadImage/501.
+convert: no images defined `image.jpg' @ error/convert.c/ConvertImageCommand/3210.
+~~~
+
+I realized that heic support was added to ImageMagick 7. I was using ImageMagick 7 on my computer, but my production server was using version 6.8.9 which was why I was experiencing the error. Easy enough, I'll just update ImageMagick on the production server to version 7. Not so fast, after all.
+
+The imagemagick package that is available through Ubuntu's `apt-get` is for version 6.8.9, so in order to get version 7 installed, I had to install it from source.
+
+The general steps I followed to do this were:
+1. Edit `apt/sources.list` to make sure that the `deb-src` lines are uncommented
+2. Build imagemagick dependencies `buid-dep imagemagick`
+3. Add and install ppa for the libheif and libde265 packages that are required for ImageMagick7
+4. Download, configure and install ImageMagick 7
+
+See below for more detail!
+
+### 1. Edit Sources
+Ubuntu uses [apt](https://www.debian.org/doc/user-manuals#apt-howto) for package management. It uses a file that stores a list of repositories (or sources) from which packages can be obtained. That `sources.list` file is usually found in `/etc/apt/sources.list` and will look like this:
+
+~~~ sh
+# deb cdrom:[Ubuntu-Server 16.04.3 LTS _Xenial Xerus_ - Release amd64 (20170801)]/ xenial main restricted
+
+# deb cdrom:[Ubuntu-Server 16.04.3 LTS _Xenial Xerus_ - Release amd64 (20170801)]/ xenial main restricted
+
+# See http://help.ubuntu.com/community/UpgradeNotes for how to upgrade to
+# newer versions of the distribution.
+deb http://us.archive.ubuntu.com/ubuntu/ xenial main restricted
+deb-src http://us.archive.ubuntu.com/ubuntu/ xenial main restricted
+~~~
+
+The first word on each line, deb or deb-src, indicates the type of archive. Deb indicates that the archive contains binary packages (deb), the pre-compiled packages that we normally use. Deb-src indicates source packages, which are the original program sources.  In my case the `deb-src` lines were commented out, and I uncommented them to instruct `apt` that it could download source files from there. You can learn more [here](https://help.ubuntu.com/community/Repositories/CommandLine#Explanation_of_the_Repository_Format).
+
+~~~ sh
+$ vim /etc/opt/sources.list #open the file with your text editor and uncomment deb-src lines
+
+# after saving the file retrieve the updated package lists:
+
+$ sudo apt-get update
+~~~
+
+### 2. Build ImageMagick dependencies
+Next you'll want to make sure that all of ImageMagick's dependencies are installed.
+
+~~~ sh
+$ sudo apt-get build-dep imagemagick -y
+~~~
+
+### 3. Add and install ppa for the libheif and libde265 packages that are required for ImageMagick 7
+In addition to the dependencies you installed in step 2, ImageMagick 7 requires two other libraries if we want to support heic files.  Those libraries aren't available in the main Ubuntu packages, so we need to install two PPAs ([libheif](https://launchpad.net/~strukturag/+archive/ubuntu/libheif) and [libde265](https://launchpad.net/~strukturag/+archive/ubuntu/libde265)). First add the PPA repositories and then install them.
+
+~~~ sh
+$ sudo add-apt-repository ppa:strukturag/libheif
+$ sudo add-apt-repository ppa:strukturag/libde265
+$ sudo apt-get update
+$ sudo apt-get install libheif-dev
+$ sudo apt-get install libde265-dev
+~~~
+
+<div markdown=""1"" class=""alert alert-warning"">If you don't have `add-apt-repository` you can also just add this repository manually to your `sources.list` file. Please note, this is NOT needed if you added and installed the libraries using `add-apt-repository` as shown above.
+
+~~~ sh
+# /etc/apt/sources.list
+
+# You'll need to change xenial to the version of Ubunut you're using. xenial is for 16.04
+
+deb http://ppa.launchpad.net/strukturag/libheif/ubuntu xenial main 
+deb-src http://ppa.launchpad.net/strukturag/libheif/ubuntu xenial main
+deb http://ppa.launchpad.net/strukturag/libde265/ubuntu xenial main 
+deb-src http://ppa.launchpad.net/strukturag/libde265/ubuntu xenial main
+~~~
+</div>
+
+### 4. Download, configure, and install ImageMagick 7
+Now we're ready to download and install ImageMagick7. cd into `/opt`, download the specific tarball you want from the [downloads page](https://imagemagick.org/download/) and then extract the files.  Once you've extracted the files, run `./configure` with the `with-heic=yes` flag, and then finally install.
+
+~~~ sh
+$ cd /opt
+$ sudo wget https://www.imagemagick.org/download/ImageMagick-7.0.8-45.tar.gz
+$ sudo tar xvzf ImageMagick-7.0.8-45.tar.gz
+$ cd ImageMagick-7.0.8-45
+$ sudo ./configure --with-heic=yes
+$ sudo make
+$ sudo checkinstall
+$ sudo ldconfig /usr/local/lib # this creates the necessary links and cache to the most recent shared libraries in /usr/local/lib
+
+# confirm that everything went well! Run the convert command and you 
+# should see something like...
+$ convert --version
+Version: ImageMagick 7.0.8-45 Q16 x86_64 2019-05-14 https://imagemagick.org
+Copyright: © 1999-2019 ImageMagick Studio LLC
+License: https://imagemagick.org/script/license.php
+Features: Cipher DPC HDRI OpenMP(4.0)
+Delegates (built-in): bzlib djvu fftw fontconfig freetype heic jbig jng jpeg lcms lqr lzma openexr pangocairo png tiff wmf x xml zlib
+~~~
+
+And that should be just about it! We've installed ImageMagick 7 with the required libraries to convert heic images to jpg. If you had a previous version of
+ImageMagick installed via `apt-get`, that version is still available which may or may be what you want. I won't go into detail about how you uninstall either
+version, but you'll likely have both versions available from the command line.
+
+ImageMagick 7 (which we just installed from source) will be available via `/usr/local/bin/convert` and the Ubuntu package ImageMagick version that was installed will be available at `/usr/bin/convert`. `/usr/local/bin` takes precendence in our $PATH variable, so therefore the ""default"" convert command will be from ImageMagick 7. You can run the `convert` command for the previous version by running it directly with `usr/bin/convert`.
+
+~~~ sh
+# version 7.0.8 was installed from source is available directly
+$ convert --version
+Version: ImageMagick 7.0.8-45 Q16 x86_64 2019-05-14 https://imagemagick.org
+Copyright: © 1999-2019 ImageMagick Studio LLC
+License: https://imagemagick.org/script/license.php
+Features: Cipher DPC HDRI OpenMP(4.0)
+Delegates (built-in): bzlib djvu fftw fontconfig freetype heic jbig jng jpeg lcms lqr lzma openexr pangocairo png tiff wmf x xml zlib
+
+# version 6.8.9 was installed via apt-get and is available at /usr/bin/convert
+$ /usr/bin/convert --version
+Version: ImageMagick 6.8.9-9 Q16 x86_64 2017-07-31 http://www.imagemagick.org
+Copyright: Copyright (C) 1999-2014 ImageMagick Studio LLC
+Features: DPC Modules OpenMP
+Delegates: bzlib cairo djvu fftw fontconfig freetype jbig jng jpeg lcms lqr ltdl lzma openexr pangocairo png rsvg tiff wmf x xml zlib
+~~~
+
+### Conclusion
+If you're using ImageMagick and need to convert heic image files to jpg, you'll need at least ImageMagick version 7. The supported ImageMagick version that you get through Ubuntu `apt-get` is version 6.8.9, so you'll need to download, configure, and install ImageMagick 7 from source. It's a bit of longer process, but completely doable given the steps summarized above. Let me know if you run into trouble!
+";"<p>I recently had a need to convert heic image files to jpg using <a href=""https://imagemagick.org/"">ImageMagick</a>.  On my computer I didn’t have to do anything different than what I’d normally do to convert an image from one format to another. This was working perfectly:</p>
+
+<div class=""language-sh highlighter-rouge""><pre class=""highlight""><code><span class=""gp"">$ </span>convert image.heic image.jpg
+</code></pre>
+</div>
+
+<p>Unfortunately, when I tried to do the same thing on my production server I ran into an error.</p>
+
+<div class=""language-sh highlighter-rouge""><pre class=""highlight""><code><span class=""gp"">$ </span>convert image.heic image.jpg
+convert: no decode delegate <span class=""k"">for </span>this image format <span class=""sb"">`</span>HEIC<span class=""s1"">' @ error/constitute.c/ReadImage/501.
+convert: no images defined `image.jpg'</span> @ error/convert.c/ConvertImageCommand/3210.
+</code></pre>
+</div>
+
+<p>I realized that heic support was added to ImageMagick 7. I was using ImageMagick 7 on my computer, but my production server was using version 6.8.9 which was why I was experiencing the error. Easy enough, I’ll just update ImageMagick on the production server to version 7. Not so fast, after all.</p>
+
+<p>The imagemagick package that is available through Ubuntu’s <code>apt-get</code> is for version 6.8.9, so in order to get version 7 installed, I had to install it from source.</p>
+
+<p>The general steps I followed to do this were:
+1. Edit <code>apt/sources.list</code> to make sure that the <code>deb-src</code> lines are uncommented
+2. Build imagemagick dependencies <code>buid-dep imagemagick</code>
+3. Add and install ppa for the libheif and libde265 packages that are required for ImageMagick7
+4. Download, configure and install ImageMagick 7</p>
+
+<p>See below for more detail!</p>
+
+<h3 id=""edit-sources"">1. Edit Sources</h3>
+<p>Ubuntu uses <a href=""https://www.debian.org/doc/user-manuals#apt-howto"">apt</a> for package management. It uses a file that stores a list of repositories (or sources) from which packages can be obtained. That <code>sources.list</code> file is usually found in <code>/etc/apt/sources.list</code> and will look like this:</p>
+
+<div class=""language-sh highlighter-rouge""><pre class=""highlight""><code><span class=""c""># deb cdrom:[Ubuntu-Server 16.04.3 LTS _Xenial Xerus_ - Release amd64 (20170801)]/ xenial main restricted</span>
+
+<span class=""c""># deb cdrom:[Ubuntu-Server 16.04.3 LTS _Xenial Xerus_ - Release amd64 (20170801)]/ xenial main restricted</span>
+
+<span class=""c""># See http://help.ubuntu.com/community/UpgradeNotes for how to upgrade to</span>
+<span class=""c""># newer versions of the distribution.</span>
+deb http://us.archive.ubuntu.com/ubuntu/ xenial main restricted
+deb-src http://us.archive.ubuntu.com/ubuntu/ xenial main restricted
+</code></pre>
+</div>
+
+<p>The first word on each line, deb or deb-src, indicates the type of archive. Deb indicates that the archive contains binary packages (deb), the pre-compiled packages that we normally use. Deb-src indicates source packages, which are the original program sources.  In my case the <code>deb-src</code> lines were commented out, and I uncommented them to instruct <code>apt</code> that it could download source files from there. You can learn more <a href=""https://help.ubuntu.com/community/Repositories/CommandLine#Explanation_of_the_Repository_Format"">here</a>.</p>
+
+<div class=""language-sh highlighter-rouge""><pre class=""highlight""><code><span class=""gp"">$ </span>vim /etc/opt/sources.list <span class=""c"">#open the file with your text editor and uncomment deb-src lines</span>
+
+<span class=""c""># after saving the file retrieve the updated package lists:</span>
+
+<span class=""gp"">$ </span>sudo apt-get update
+</code></pre>
+</div>
+
+<h3 id=""build-imagemagick-dependencies"">2. Build ImageMagick dependencies</h3>
+<p>Next you’ll want to make sure that all of ImageMagick’s dependencies are installed.</p>
+
+<div class=""language-sh highlighter-rouge""><pre class=""highlight""><code><span class=""gp"">$ </span>sudo apt-get build-dep imagemagick -y
+</code></pre>
+</div>
+
+<h3 id=""add-and-install-ppa-for-the-libheif-and-libde265-packages-that-are-required-for-imagemagick-7"">3. Add and install ppa for the libheif and libde265 packages that are required for ImageMagick 7</h3>
+<p>In addition to the dependencies you installed in step 2, ImageMagick 7 requires two other libraries if we want to support heic files.  Those libraries aren’t available in the main Ubuntu packages, so we need to install two PPAs (<a href=""https://launchpad.net/~strukturag/+archive/ubuntu/libheif"">libheif</a> and <a href=""https://launchpad.net/~strukturag/+archive/ubuntu/libde265"">libde265</a>). First add the PPA repositories and then install them.</p>
+
+<div class=""language-sh highlighter-rouge""><pre class=""highlight""><code><span class=""gp"">$ </span>sudo add-apt-repository ppa:strukturag/libheif
+<span class=""gp"">$ </span>sudo add-apt-repository ppa:strukturag/libde265
+<span class=""gp"">$ </span>sudo apt-get update
+<span class=""gp"">$ </span>sudo apt-get install libheif-dev
+<span class=""gp"">$ </span>sudo apt-get install libde265-dev
+</code></pre>
+</div>
+
+<div class=""alert alert-warning"">
+  <p>If you don’t have <code>add-apt-repository</code> you can also just add this repository manually to your <code>sources.list</code> file. Please note, this is NOT needed if you added and installed the libraries using <code>add-apt-repository</code> as shown above.</p>
+
+  <div class=""language-sh highlighter-rouge""><pre class=""highlight""><code><span class=""c""># /etc/apt/sources.list</span>
+
+<span class=""c""># You'll need to change xenial to the version of Ubunut you're using. xenial is for 16.04</span>
+
+deb http://ppa.launchpad.net/strukturag/libheif/ubuntu xenial main 
+deb-src http://ppa.launchpad.net/strukturag/libheif/ubuntu xenial main
+deb http://ppa.launchpad.net/strukturag/libde265/ubuntu xenial main 
+deb-src http://ppa.launchpad.net/strukturag/libde265/ubuntu xenial main
+</code></pre>
+  </div>
+</div>
+
+<h3 id=""download-configure-and-install-imagemagick-7"">4. Download, configure, and install ImageMagick 7</h3>
+<p>Now we’re ready to download and install ImageMagick7. cd into <code>/opt</code>, download the specific tarball you want from the <a href=""https://imagemagick.org/download/"">downloads page</a> and then extract the files.  Once you’ve extracted the files, run <code>./configure</code> with the <code>with-heic=yes</code> flag, and then finally install.</p>
+
+<div class=""language-sh highlighter-rouge""><pre class=""highlight""><code><span class=""gp"">$ </span><span class=""nb"">cd</span> /opt
+<span class=""gp"">$ </span>sudo wget https://www.imagemagick.org/download/ImageMagick-7.0.8-45.tar.gz
+<span class=""gp"">$ </span>sudo tar xvzf ImageMagick-7.0.8-45.tar.gz
+<span class=""gp"">$ </span><span class=""nb"">cd </span>ImageMagick-7.0.8-45
+<span class=""gp"">$ </span>sudo ./configure --with-heic<span class=""o"">=</span>yes
+<span class=""gp"">$ </span>sudo make
+<span class=""gp"">$ </span>sudo checkinstall
+<span class=""gp"">$ </span>sudo ldconfig /usr/local/lib <span class=""c""># this creates the necessary links and cache to the most recent shared libraries in /usr/local/lib</span>
+
+<span class=""c""># confirm that everything went well! Run the convert command and you </span>
+<span class=""c""># should see something like...</span>
+<span class=""gp"">$ </span>convert --version
+Version: ImageMagick 7.0.8-45 Q16 x86_64 2019-05-14 https://imagemagick.org
+Copyright: © 1999-2019 ImageMagick Studio LLC
+License: https://imagemagick.org/script/license.php
+Features: Cipher DPC HDRI OpenMP<span class=""o"">(</span>4.0<span class=""o"">)</span>
+Delegates <span class=""o"">(</span>built-in<span class=""o"">)</span>: bzlib djvu fftw fontconfig freetype heic jbig jng jpeg lcms lqr lzma openexr pangocairo png tiff wmf x xml zlib
+</code></pre>
+</div>
+
+<p>And that should be just about it! We’ve installed ImageMagick 7 with the required libraries to convert heic images to jpg. If you had a previous version of
+ImageMagick installed via <code>apt-get</code>, that version is still available which may or may be what you want. I won’t go into detail about how you uninstall either
+version, but you’ll likely have both versions available from the command line.</p>
+
+<p>ImageMagick 7 (which we just installed from source) will be available via <code>/usr/local/bin/convert</code> and the Ubuntu package ImageMagick version that was installed will be available at <code>/usr/bin/convert</code>. <code>/usr/local/bin</code> takes precendence in our $PATH variable, so therefore the “default” convert command will be from ImageMagick 7. You can run the <code>convert</code> command for the previous version by running it directly with <code>usr/bin/convert</code>.</p>
+
+<div class=""language-sh highlighter-rouge""><pre class=""highlight""><code><span class=""c""># version 7.0.8 was installed from source is available directly</span>
+<span class=""gp"">$ </span>convert --version
+Version: ImageMagick 7.0.8-45 Q16 x86_64 2019-05-14 https://imagemagick.org
+Copyright: © 1999-2019 ImageMagick Studio LLC
+License: https://imagemagick.org/script/license.php
+Features: Cipher DPC HDRI OpenMP<span class=""o"">(</span>4.0<span class=""o"">)</span>
+Delegates <span class=""o"">(</span>built-in<span class=""o"">)</span>: bzlib djvu fftw fontconfig freetype heic jbig jng jpeg lcms lqr lzma openexr pangocairo png tiff wmf x xml zlib
+
+<span class=""c""># version 6.8.9 was installed via apt-get and is available at /usr/bin/convert</span>
+<span class=""gp"">$ </span>/usr/bin/convert --version
+Version: ImageMagick 6.8.9-9 Q16 x86_64 2017-07-31 http://www.imagemagick.org
+Copyright: Copyright <span class=""o"">(</span>C<span class=""o"">)</span> 1999-2014 ImageMagick Studio LLC
+Features: DPC Modules OpenMP
+Delegates: bzlib cairo djvu fftw fontconfig freetype jbig jng jpeg lcms lqr ltdl lzma openexr pangocairo png rsvg tiff wmf x xml zlib
+</code></pre>
+</div>
+
+<h3 id=""conclusion"">Conclusion</h3>
+<p>If you’re using ImageMagick and need to convert heic image files to jpg, you’ll need at least ImageMagick version 7. The supported ImageMagick version that you get through Ubuntu <code>apt-get</code> is version 6.8.9, so you’ll need to download, configure, and install ImageMagick 7 from source. It’s a bit of longer process, but completely doable given the steps summarized above. Let me know if you run into trouble!</p>
+";2019-05-21 00:25:23.581945;2019-05-21 00:25:23.729399;2019-05-21 00:31:10.147923;;How to install ImageMagick 7 on Ubuntu;Learn how to install ImageMagick 7 on Ubuntu;ubuntu, imagemagick;how-to-install-imagemagick-7-on-ubuntu-16-04;t;Article
+15;form_for with nested shallow resources;form_for with nested shallow resources;"Given the following nested shallow routes for venues, the venue's collection actions will be scoped under the parent but its member actions will not be nested.
+
+~~~ ruby
+# config/routes.rb
+
+resources :organizations do
+  resources :venues, shallow: true
+end
+~~~
+
+~~~ sh
+$ rake routes
+  Prefix              Verb   URI Pattern                                                                              Controller#Action
+  organization_venues GET    /organizations/:organization_id/venues(.:format)                                         venues#index
+                      POST   /organizations/:organization_id/venues(.:format)                                         venues#create
+new_organization_venue GET    /organizations/:organization_id/venues/new(.:format)                                     venues#new
+           edit_venue GET    /venues/:id/edit(.:format)                                                               venues#edit
+                venue GET    /venues/:id(.:format)                                                                    venues#show
+                      PATCH  /venues/:id(.:format)                                                                    venues#update
+                      PUT    /venues/:id(.:format)                                                                    venues#update
+                      DELETE /venues/:id(.:format)                                                                    venues#destroy
+        organizations GET    /organizations(.:format)                                                                 organizations#index
+                      POST   /organizations(.:format)                                                                 organizations#create
+     new_organization GET    /organizations/new(.:format)                                                             organizations#new
+    edit_organization GET    /organizations/:id/edit(.:format)                                                        organizations#edit
+         organization GET    /organizations/:id(.:format)                                                             organizations#show
+                      PATCH  /organizations/:id(.:format)                                                             organizations#update
+                      PUT    /organizations/:id(.:format)                                                             organizations#update
+                      DELETE /organizations/:id(.:format)                                                             organizations#destroy
+~~~
+
+Typically for a venue objects form, you'll define it as `form_for(@venue)` but that will generate the form url as `/venues` for a new object or `/venues/:id` for an existing object.  How do you get the form for the new object to post to the nested route (`/organizations/:organization_id/venues`) and the form for the existing object to post to the `/venues/:id` route?
+
+Simply define your `form_for` with the organization object defined for your new form and set to `nil` for your edit form.
+
+~~~ ruby
+# app/controllers/venues_controller.rb
+
+def new
+  @organization = Organization.find(params[:organization_id])
+  @venue = Venue.new
+end
+
+def edit
+  @venue = Venue.find(params[:id])
+end
+~~~
+
+~~~ haml
+# app/view/venues/_form.html.haml
+
+= form_for [@organization, @venue] do |f|
+  //your form here
+~~~
+
+In the edit action we haven't defined the `@organization` variable and because that's `nil`, Rails will post to the second object only.
+
+<div markdown=""1"" class=""alert alert-warning small"">Reference:
+
+* [https://stackoverflow.com/questions/9772588/when-using-shallow-routes-different-routes-require-different-form-for-arguments](https://stackoverflow.com/questions/9772588/when-using-shallow-routes-different-routes-require-different-form-for-arguments)
+
+</div>";"<p>Given the following nested shallow routes for venues, the venue’s collection actions will be scoped under the parent but its member actions will not be nested.</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1""># config/routes.rb</span>
+
+<span class=""n"">resources</span> <span class=""ss"">:organizations</span> <span class=""k"">do</span>
+  <span class=""n"">resources</span> <span class=""ss"">:venues</span><span class=""p"">,</span> <span class=""ss"">shallow: </span><span class=""kp"">true</span>
+<span class=""k"">end</span>
+</code></pre>
+</div>
+
+<div class=""language-sh highlighter-rouge""><pre class=""highlight""><code><span class=""gp"">$ </span>rake routes
+  Prefix              Verb   URI Pattern                                                                              Controller#Action
+  organization_venues GET    /organizations/:organization_id/venues<span class=""o"">(</span>.:format<span class=""o"">)</span>                                         venues#index
+                      POST   /organizations/:organization_id/venues<span class=""o"">(</span>.:format<span class=""o"">)</span>                                         venues#create
+new_organization_venue GET    /organizations/:organization_id/venues/new<span class=""o"">(</span>.:format<span class=""o"">)</span>                                     venues#new
+           edit_venue GET    /venues/:id/edit<span class=""o"">(</span>.:format<span class=""o"">)</span>                                                               venues#edit
+                venue GET    /venues/:id<span class=""o"">(</span>.:format<span class=""o"">)</span>                                                                    venues#show
+                      PATCH  /venues/:id<span class=""o"">(</span>.:format<span class=""o"">)</span>                                                                    venues#update
+                      PUT    /venues/:id<span class=""o"">(</span>.:format<span class=""o"">)</span>                                                                    venues#update
+                      DELETE /venues/:id<span class=""o"">(</span>.:format<span class=""o"">)</span>                                                                    venues#destroy
+        organizations GET    /organizations<span class=""o"">(</span>.:format<span class=""o"">)</span>                                                                 organizations#index
+                      POST   /organizations<span class=""o"">(</span>.:format<span class=""o"">)</span>                                                                 organizations#create
+     new_organization GET    /organizations/new<span class=""o"">(</span>.:format<span class=""o"">)</span>                                                             organizations#new
+    edit_organization GET    /organizations/:id/edit<span class=""o"">(</span>.:format<span class=""o"">)</span>                                                        organizations#edit
+         organization GET    /organizations/:id<span class=""o"">(</span>.:format<span class=""o"">)</span>                                                             organizations#show
+                      PATCH  /organizations/:id<span class=""o"">(</span>.:format<span class=""o"">)</span>                                                             organizations#update
+                      PUT    /organizations/:id<span class=""o"">(</span>.:format<span class=""o"">)</span>                                                             organizations#update
+                      DELETE /organizations/:id<span class=""o"">(</span>.:format<span class=""o"">)</span>                                                             organizations#destroy
+</code></pre>
+</div>
+
+<p>Typically for a venue objects form, you’ll define it as <code>form_for(@venue)</code> but that will generate the form url as <code>/venues</code> for a new object or <code>/venues/:id</code> for an existing object.  How do you get the form for the new object to post to the nested route (<code>/organizations/:organization_id/venues</code>) and the form for the existing object to post to the <code>/venues/:id</code> route?</p>
+
+<p>Simply define your <code>form_for</code> with the organization object defined for your new form and set to <code>nil</code> for your edit form.</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1""># app/controllers/venues_controller.rb</span>
+
+<span class=""k"">def</span> <span class=""nf"">new</span>
+  <span class=""vi"">@organization</span> <span class=""o"">=</span> <span class=""no"">Organization</span><span class=""p"">.</span><span class=""nf"">find</span><span class=""p"">(</span><span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:organization_id</span><span class=""p"">])</span>
+  <span class=""vi"">@venue</span> <span class=""o"">=</span> <span class=""no"">Venue</span><span class=""p"">.</span><span class=""nf"">new</span>
+<span class=""k"">end</span>
+
+<span class=""k"">def</span> <span class=""nf"">edit</span>
+  <span class=""vi"">@venue</span> <span class=""o"">=</span> <span class=""no"">Venue</span><span class=""p"">.</span><span class=""nf"">find</span><span class=""p"">(</span><span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:id</span><span class=""p"">])</span>
+<span class=""k"">end</span>
+</code></pre>
+</div>
+
+<div class=""language-haml highlighter-rouge""><pre class=""highlight""><code># app/view/venues/_form.html.haml
+
+<span class=""p"">=</span> <span class=""n"">form_for</span> <span class=""p"">[</span><span class=""vi"">@organization</span><span class=""p"">,</span> <span class=""vi"">@venue</span><span class=""p"">]</span> <span class=""k"">do</span> <span class=""o"">|</span><span class=""n"">f</span><span class=""o"">|</span>
+  <span class=""c"">//your form here
+</span></code></pre>
+</div>
+
+<p>In the edit action we haven’t defined the <code>@organization</code> variable and because that’s <code>nil</code>, Rails will post to the second object only.</p>
+
+<div class=""alert alert-warning small"">
+  <p>Reference:</p>
+
+  <ul>
+    <li><a href=""https://stackoverflow.com/questions/9772588/when-using-shallow-routes-different-routes-require-different-form-for-arguments"">https://stackoverflow.com/questions/9772588/when-using-shallow-routes-different-routes-require-different-form-for-arguments</a></li>
+  </ul>
+
+</div>
+";2019-05-21 20:53:04.930604;2019-05-21 20:53:04.966866;2019-05-23 19:38:44.973384;;How to use form_for with nested shallow resources;Learn how to define your form_for object so the correct url is inferred for a nested shallow resource;rails, form_for, nested resources, shallow nested resources;form_for-with-nested-shallow-resources;t;Snippet
+16;Pass local variables to Rails partial in only specific cases;Learn how to pass a local variable into a Rails partial in only specific cases;"You can pass a local variable to a partial in only specific cases by using `local_assigns`.
+
+~~~ haml
+# index.html.haml
+= render partial: ""invoice""
+~~~
+
+~~~ haml
+# show.html.haml
+= render partial: ""invoice"", with_account: true
+~~~
+
+~~~ haml
+%h5
+  = invoice.description
+- if local_assigns[:with_account]
+  %p
+    Account ID: 
+    = invoice.account_id
+~~~
+
+<div markdown=""1"" class=""alert alert-warning small"">
+Reference: 
+
+* [https://guides.rubyonrails.org/layouts_and_rendering.html#passing-local-variables](https://guides.rubyonrails.org/layouts_and_rendering.html#passing-local-variables)
+</div>
+";"<p>You can pass a local variable to a partial in only specific cases by using <code>local_assigns</code>.</p>
+
+<div class=""language-haml highlighter-rouge""><pre class=""highlight""><code># index.html.haml
+<span class=""p"">=</span> <span class=""n"">render</span> <span class=""ss"">partial: </span><span class=""s2"">""invoice""</span>
+</code></pre>
+</div>
+
+<div class=""language-haml highlighter-rouge""><pre class=""highlight""><code># show.html.haml
+<span class=""p"">=</span> <span class=""n"">render</span> <span class=""ss"">partial: </span><span class=""s2"">""invoice""</span><span class=""p"">,</span> <span class=""ss"">with_account: </span><span class=""kp"">true</span>
+</code></pre>
+</div>
+
+<div class=""language-haml highlighter-rouge""><pre class=""highlight""><code><span class=""nt"">%h5</span>
+  <span class=""p"">=</span> <span class=""n"">invoice</span><span class=""p"">.</span><span class=""nf"">description</span>
+<span class=""p"">-</span> <span class=""k"">if</span> <span class=""n"">local_assigns</span><span class=""p"">[</span><span class=""ss"">:with_account</span><span class=""p"">]</span>
+  <span class=""nt"">%p</span>
+    Account ID: 
+    <span class=""p"">=</span> <span class=""n"">invoice</span><span class=""p"">.</span><span class=""nf"">account_id</span>
+</code></pre>
+</div>
+
+<div class=""alert alert-warning small"">
+  <p>Reference:</p>
+
+  <ul>
+    <li><a href=""https://guides.rubyonrails.org/layouts_and_rendering.html#passing-local-variables"">https://guides.rubyonrails.org/layouts_and_rendering.html#passing-local-variables</a></li>
+  </ul>
+</div>
+";2019-05-23 19:40:43.565856;2019-05-23 19:40:44.733623;2019-05-23 19:41:44.18257;;Pass local variables to Rails partial in only specific cases;Learn how to pass a local variable into a Rails partial in only specific cases;rails, rails tips;pass-local-variables-to-rails-partial-in-only-specific-cases;t;Snippet
+17;will_paginate page_entries_heper;will_paginate has a handy way to display page and collection information;"Need to display page information and the total count of your collection? Use the `page_entries_helper` provided by will_paginate.
+
+~~~ ruby
+# app/controllers/invoices_controller.rb
+
+def index
+  @invoices = Invoice.all.paginate(page: params[:page], per_page: 50)
+end
+~~~
+
+~~~ haml
+// app/views/invoices/index.html.haml
+
+%h2 Invoices
+.text-muted 
+  = page_entries_info(@invoices) 
+= render partial: 'invoices/table'
+= will_paginate(@invoices)
+~~~
+
+Which will look something like this:
+
+![](https://everclimb.s3.amazonaws.com/images/original/2-Screen_Shot_2019-05-23_at_3.56.45_PM.png?1558641424 ){: .img-responsive.img-content}
+
+
+<div markdown=""1"" class=""alert alert-warning small"">
+
+Reference:
+
+* [https://www.rubydoc.info/github/mislav/will_paginate/WillPaginate/ViewHelpers#page_entries_info-instance_method](https://www.rubydoc.info/github/mislav/will_paginate/WillPaginate/ViewHelpers#page_entries_info-instance_method)
+</div>
+
+";"<p>Need to display page information and the total count of your collection? Use the <code>page_entries_helper</code> provided by will_paginate.</p>
+
+<div class=""language-ruby highlighter-rouge""><pre class=""highlight""><code><span class=""c1""># app/controllers/invoices_controller.rb</span>
+
+<span class=""k"">def</span> <span class=""nf"">index</span>
+  <span class=""vi"">@invoices</span> <span class=""o"">=</span> <span class=""no"">Invoice</span><span class=""p"">.</span><span class=""nf"">all</span><span class=""p"">.</span><span class=""nf"">paginate</span><span class=""p"">(</span><span class=""ss"">page: </span><span class=""n"">params</span><span class=""p"">[</span><span class=""ss"">:page</span><span class=""p"">],</span> <span class=""ss"">per_page: </span><span class=""mi"">50</span><span class=""p"">)</span>
+<span class=""k"">end</span>
+</code></pre>
+</div>
+
+<div class=""language-haml highlighter-rouge""><pre class=""highlight""><code><span class=""c"">// app/views/invoices/index.html.haml
+</span>
+<span class=""nt"">%h2</span> Invoices
+<span class=""nc"">.text-muted</span> 
+  <span class=""p"">=</span> <span class=""n"">page_entries_info</span><span class=""p"">(</span><span class=""vi"">@invoices</span><span class=""p"">)</span><span class=""err""> </span>
+<span class=""p"">=</span> <span class=""n"">render</span> <span class=""ss"">partial: </span><span class=""s1"">'invoices/table'</span>
+<span class=""p"">=</span> <span class=""n"">will_paginate</span><span class=""p"">(</span><span class=""vi"">@invoices</span><span class=""p"">)</span>
+</code></pre>
+</div>
+
+<p>Which will look something like this:</p>
+
+<p><img src=""https://everclimb.s3.amazonaws.com/images/original/2-Screen_Shot_2019-05-23_at_3.56.45_PM.png?1558641424"" alt="""" class=""img-responsive img-content"" /></p>
+
+<div class=""alert alert-warning small"">
+
+  <p>Reference:</p>
+
+  <ul>
+    <li><a href=""https://www.rubydoc.info/github/mislav/will_paginate/WillPaginate/ViewHelpers#page_entries_info-instance_method"">https://www.rubydoc.info/github/mislav/will_paginate/WillPaginate/ViewHelpers#page_entries_info-instance_method</a></li>
+  </ul>
+</div>
+
+";2019-05-23 19:58:57.449526;2019-05-23 19:51:45.610682;2019-05-23 19:58:57.461832;;Display the collection count and the page info using will_paginate;will_paginate has a handy way to display page and collection information;rails, rails tips, will_paginate;will_paginate-page_entries_heper;t;Snippet

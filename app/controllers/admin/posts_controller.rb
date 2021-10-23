@@ -44,7 +44,8 @@ class Admin::PostsController < Admin::BaseController
         :show_on_index,
         :seo_title,
         :meta_description,
-        :meta_keywords
+        :meta_keywords,
+        :tag_list
       )
     end
 
